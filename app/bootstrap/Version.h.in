@@ -1,0 +1,5 @@
+// Generated (configure_file) — single source of truth for display strings.
+#pragma once
+
+#define NUVIO_VERSION_STRING "@PROJECT_VERSION@"
+#define BUILD_TYPE_NAME      "@CMAKE_BUILD_TYPE@"
