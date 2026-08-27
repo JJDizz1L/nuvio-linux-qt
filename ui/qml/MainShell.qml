@@ -57,6 +57,53 @@ ApplicationWindow {
         anchors.fill: parent
         visible: navigation.currentRoute === "library"
     }
+    Pages.MetaPage {
+        anchors.fill: parent
+        visible: navigation.currentRoute === "meta"
+    }
+
+    // ---- no-source toast (shell level) ---------------------------------------
+    // Surfaces honest negatives on ANY route the user might be on - a card
+    // click in Library or an episode/Play click on the detail page both land
+    // here. Auto-fades; never blocks navigation.
+    Rectangle {
+        id: toast
+        opacity: 0
+        z: 50
+        radius: Theme.radiusMd
+        color: Theme.chromeScrim
+        width: Math.min(parent ? parent.width - 64 : 320,
+                        toastText.width + 32)
+        height: toastText.height + 18
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.bottom: parent.bottom
+        anchors.bottomMargin: 42
+
+        Text {
+            id: toastText
+            anchors.centerIn: parent
+            color: Theme.textPrimary
+            font.pixelSize: 13
+        }
+        Behavior on opacity {
+            NumberAnimation { duration: Theme.fadeMs }
+        }
+        Timer {
+            id: toastTimer
+            interval: 2600
+            onTriggered: toast.opacity = 0
+        }
+    }
+
+    Connections {
+        target: playback
+        function onPlaybackUnavailable(title) {
+            toastText.text =
+                qsTr("No playable source found for %1").arg(title)
+            toast.opacity = 1
+            toastTimer.restart()
+        }
+    }
 
     // Playback-session wiring (plan §8 P1): a resolved card lands on the
     // player route; the harness keeps exclusive play rights in smoke mode.

@@ -22,48 +22,6 @@ Item {
         }
     }
 
-    // ---- no-source toast ----------------------------------------------------
-    // Honest negative feedback when every configured addon answered without
-    // a directly playable source. Auto-fades; never blocks navigation.
-    Rectangle {
-        id: toast
-        opacity: 0
-        z: 10
-        radius: Theme.radiusMd
-        color: Theme.chromeScrim
-        width: Math.min(parent ? parent.width - 64 : 320,
-                        toastText.width + 32)
-        height: toastText.height + 18
-        anchors.horizontalCenter: parent.horizontalCenter
-        anchors.bottom: parent.bottom
-        anchors.bottomMargin: 42
-
-        Text {
-            id: toastText
-            anchors.centerIn: parent
-            color: Theme.textPrimary
-            font.pixelSize: 13
-        }
-        Behavior on opacity {
-            NumberAnimation { duration: Theme.fadeMs }
-        }
-        Timer {
-            id: toastTimer
-            interval: 2600
-            onTriggered: toast.opacity = 0
-        }
-    }
-
-    Connections {
-        target: playback
-        function onPlaybackUnavailable(title) {
-            toastText.text =
-                qsTr("No playable source found for %1").arg(title)
-            toast.opacity = 1
-            toastTimer.restart()
-        }
-    }
-
     // ---- header ------------------------------------------------------------
     Item {
         id: header
@@ -156,15 +114,18 @@ Item {
                                 asynchronous: true
                                 source: "image://poster/" + modelData.poster
                             }
-                            // Card click launches through the playback
-                            // session: resolver policy -> direct source ->
-                            // video route (or an honest no-source toast).
+                            // Card click opens the DETAIL route; playback
+                            // intent moves to the meta page's Play/episode
+                            // actions (which funnel through the same
+                            // playback session).
                             MouseArea {
                                 anchors.fill: parent
-                                onClicked:
-                                    playback.requestPlay(shelfInfo.type,
-                                                         modelData.id,
-                                                         modelData.name)
+                                onClicked: {
+                                    meta.load(shelfInfo.type,
+                                              modelData.id,
+                                              modelData.name)
+                                    navigation.push("meta")
+                                }
                             }
                             Text {
                                 anchors.bottom: parent.bottom

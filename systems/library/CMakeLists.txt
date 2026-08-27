@@ -2,6 +2,7 @@
 # (tmdb/trakt/simkl/stremio) and repositories on top. Online in P1/P3.
 add_library(nuvio_library STATIC
     include/nuvio/library/CatalogService.h src/CatalogService.cpp
+    include/nuvio/library/MetaService.h    src/MetaService.cpp
     include/nuvio/library/AddonRegistry.h  src/AddonRegistry.cpp
     src/LibrarySystem.cpp)
 
@@ -20,3 +21,8 @@ add_executable(nuvio_addons_tests tests/AddonRegistryTests.cpp)
 target_link_libraries(nuvio_addons_tests PRIVATE nuvio::library Qt6::Test)
 nuvio_common_target_props(nuvio_addons_tests)
 add_test(NAME nuvio_addons COMMAND nuvio_addons_tests)
+
+add_executable(nuvio_meta_tests tests/MetaServiceTests.cpp)
+target_link_libraries(nuvio_meta_tests PRIVATE nuvio::library)
+nuvio_common_target_props(nuvio_meta_tests)
+add_test(NAME nuvio_meta COMMAND nuvio_meta_tests)

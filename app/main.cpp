@@ -20,6 +20,7 @@
 #include "nuvio/authsync/AuthService.h"
 #include "nuvio/library/AddonRegistry.h"
 #include "nuvio/library/CatalogService.h"
+#include "nuvio/library/MetaService.h"
 #include "nuvio/playback/PlaybackSession.h"
 #include "nuvio/playback/StreamResolver.h"
 #include "nuvio/p2p/P2pEngine.h"
@@ -104,6 +105,7 @@ int main(int argc, char* argv[])
     auto auth       = std::make_unique<nuvio::authsync::AuthService>();
     auto settings   = std::make_unique<nuvio::settings::AppSettings>();
     auto catalog    = std::make_unique<nuvio::library::CatalogService>();
+    auto metaSvc    = std::make_unique<nuvio::library::MetaService>();
     auto addonreg   = std::make_unique<nuvio::library::AddonRegistry>();
     addonreg->load();
 
@@ -202,6 +204,9 @@ int main(int argc, char* argv[])
     engine.rootContext()->setContextProperty(
         QStringLiteral("catalog"), QVariant::fromValue<QObject*>(
                                         catalog.get()));
+    engine.rootContext()->setContextProperty(
+        QStringLiteral("meta"), QVariant::fromValue<QObject*>(
+                                    metaSvc.get()));
     engine.rootContext()->setContextProperty(
         QStringLiteral("auth"), QVariant::fromValue<QObject*>(auth.get()));
     engine.addImageProvider(QStringLiteral("poster"),
