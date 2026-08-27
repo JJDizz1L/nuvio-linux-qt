@@ -26,6 +26,7 @@ Item {
 
     function requestPreview(type, id, name, pos) {
         if (typeof heroController === "undefined") return
+        if (!appsettings.hoverPreviewEnabled) return
         const k = type + ":" + id
         if (library.previewKey === k) return
         library.stopPreview()
@@ -251,9 +252,11 @@ Item {
                                 }
                                 Timer {
                                     id: hoverTimer
-                                    interval: 2000
+                                    interval: appsettings.hoverPreviewDelayMs
                                     onTriggered: {
                                         if (!cardArea.containsMouse) return
+                                        if (!appsettings.hoverPreviewEnabled)
+                                            return
                                         library.requestPreview(
                                             shelfInfo.type,
                                             modelData.id,

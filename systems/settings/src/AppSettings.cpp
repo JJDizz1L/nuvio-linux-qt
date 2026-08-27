@@ -337,6 +337,33 @@ void AppSettings::setSubtitleBottomOffset(int v)
     emit subtitleStyleChanged();
 }
 
+// ---- poster hover preview (Qt-line-local; defaults = Compose behavior) ------
+
+bool AppSettings::hoverPreviewEnabled() const
+{
+    return m_store->props.getBoolean("hover_preview_enabled").value_or(true);
+}
+
+void AppSettings::setHoverPreviewEnabled(bool v)
+{
+    if (hoverPreviewEnabled() == v) return;
+    m_store->props.putBoolean("hover_preview_enabled", v);
+    emit hoverPreviewChanged();
+}
+
+int AppSettings::hoverPreviewDelayMs() const
+{
+    return m_store->props.getInt("hover_preview_delay_ms").value_or(2000);
+}
+
+void AppSettings::setHoverPreviewDelayMs(int v)
+{
+    v = std::clamp(v, 250, 10000);
+    if (hoverPreviewDelayMs() == v) return;
+    m_store->props.putInt("hover_preview_delay_ms", v);
+    emit hoverPreviewChanged();
+}
+
 int AppSettings::subtitleFontSize() const
 {
     const auto raw = m_store->player.getInt(

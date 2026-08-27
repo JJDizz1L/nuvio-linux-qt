@@ -44,6 +44,13 @@ class AppSettings final : public QObject {
     Q_PROPERTY(QString subtitleTextColor READ subtitleTextColor WRITE
                    setSubtitleTextColor NOTIFY subtitleStyleChanged)
 
+    // Poster hover preview (Qt-line-local keys; Compose keeps these inside
+    // its opaque poster_card_style payload — no cross-line contract yet).
+    Q_PROPERTY(bool hoverPreviewEnabled READ hoverPreviewEnabled WRITE
+                   setHoverPreviewEnabled NOTIFY hoverPreviewChanged)
+    Q_PROPERTY(int hoverPreviewDelayMs READ hoverPreviewDelayMs WRITE
+                   setHoverPreviewDelayMs NOTIFY hoverPreviewChanged)
+
 public:
     explicit AppSettings(QObject* parent = nullptr);
 
@@ -84,6 +91,11 @@ public:
     void                  setSubtitleBold(bool v);
     [[nodiscard]] int     subtitleBottomOffset() const;
     void                  setSubtitleBottomOffset(int v);
+    // Poster hover preview (Qt-line-local; defaults mirror Compose behavior).
+    [[nodiscard]] bool    hoverPreviewEnabled() const;
+    void                  setHoverPreviewEnabled(bool v);
+    [[nodiscard]] int     hoverPreviewDelayMs() const;
+    void                  setHoverPreviewDelayMs(int v);
 
     /// --- remote-profile-sync surface (leg 4) ---------------------------------
     /// Current player-settings feature payload (Compose blob v3 fragment).
@@ -97,6 +109,7 @@ public:
 signals:
     void darkThemeChanged();
     void subtitleStyleChanged();
+    void hoverPreviewChanged();
     void decoderModeChanged();
     void cacheMbChanged();
     void torrentCacheSizeChanged();

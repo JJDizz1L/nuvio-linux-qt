@@ -53,6 +53,50 @@ Item {
             }
         }
 
+        // ---- appearance: poster hover preview -----------------------------------
+        Column {
+            width: parent.width
+            spacing: 4
+            Row {
+                width: parent.width
+                spacing: Theme.spacingSm
+                Switch {
+                    id: hoverSwitch
+                    checked: appsettings.hoverPreviewEnabled
+                    onToggled: appsettings.hoverPreviewEnabled = checked
+                }
+                Text {
+                    text: qsTr("Poster hover preview")
+                    color: Theme.textPrimary
+                    font.pixelSize: 15
+                    anchors.verticalCenter: parent.verticalCenter
+                }
+            }
+            Row {
+                visible: hoverSwitch.checked
+                width: parent.width
+                spacing: Theme.spacingSm
+                Text {
+                    width: parent.width * 0.4
+                    text: qsTr("Hover delay")
+                    color: Theme.textPrimary
+                    font.pixelSize: 15
+                    anchors.verticalCenter: parent.verticalCenter
+                }
+                Slider {
+                    width: parent.width * 0.5
+                    from: 500; to: 5000; stepSize: 250
+                    value: appsettings.hoverPreviewDelayMs
+                    onMoved: appsettings.hoverPreviewDelayMs = value
+                }
+                Label {
+                    text: (appsettings.hoverPreviewDelayMs / 1000) + " s"
+                    color: Theme.textSecondary
+                    anchors.verticalCenter: parent.verticalCenter
+                }
+            }
+        }
+
         // ---- playback: decoder -------------------------------------------------
         Column {
             width: parent.width
