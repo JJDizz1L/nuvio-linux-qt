@@ -1,0 +1,4 @@
+add_executable(nuvio_settings_tests PropertiesStoreTests.cpp)
+target_link_libraries(nuvio_settings_tests PRIVATE nuvio::settings)
+nuvio_common_target_props(nuvio_settings_tests)
+add_test(NAME nuvio_settings_store COMMAND nuvio_settings_tests)
