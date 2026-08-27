@@ -2,210 +2,307 @@
 
 #include <sys/stat.h>
 
-#include <chrono>
 #include <cstdio>
+#include <cstdlib>
+#include <ctime>
 #include <fstream>
 #include <sstream>
 
 namespace nuvio::settings {
+namespace {
 
-inline bool isSpaceCh(char c) { return c == ' ' || c == '\t' || c == '\f'; }
+// ---- shared low-level helpers ----------------------------------------------
 
-static void appendUtf8(std::string& out, unsigned int cp)
+void appendUtf8(std::string& out, unsigned cp)
 {
-    if (cp < 0x80) { out += char(cp); return; }
-    if (cp < 0x800) {
-        out += char(0xC0 | (cp >> 6));
-        out += char(0x80 | (cp & 0x3F));
+    if (cp < 0x80) {
+        out += static_cast<char>(cp);
+    } else if (cp < 0x800) {
+        out += static_cast<char>(0xC0 | (cp >> 6));
+        out += static_cast<char>(0x80 | (cp & 0x3F));
     } else if (cp < 0x10000) {
-        out += char(0xE0 | (cp >> 12));
-        out += char(0x80 | ((cp >> 6) & 0x3F));
-        out += char(0x80 | (cp & 0x3F));
+        out += static_cast<char>(0xE0 | (cp >> 12));
+        out += static_cast<char>(0x80 | ((cp >> 6) & 0x3F));
+        out += static_cast<char>(0x80 | (cp & 0x3F));
     } else {
-        out += char(0xF0 | (cp >> 18));
-        out += char(0x80 | ((cp >> 12) & 0x3F));
-        out += char(0x80 | ((cp >> 6) & 0x3F));
-        out += char(0x80 | (cp & 0x3F));
+        out += static_cast<char>(0xF0 | (cp >> 18));
+        out += static_cast<char>(0x80 | ((cp >> 12) & 0x3F));
+        out += static_cast<char>(0x80 | ((cp >> 6) & 0x3F));
+        out += static_cast<char>(0x80 | (cp & 0x3F));
     }
 }
 
-static unsigned int pendHi = 0;
-
-static void flushCp(std::string& out, unsigned int cp)
+int hexVal(const char c)
 {
-    if (cp >= 0xD800 && cp <= 0xDBFF) { pendHi = cp; return; }
-    if (cp >= 0xDC00 && cp <= 0xDFFF && pendHi) {
-        cp = 0x10000 + ((pendHi - 0xD800) << 10) + (cp - 0xDC00);
-        pendHi = 0;
-    } else pendHi = 0;
+    if (c >= '0' && c <= '9') return c - '0';
+    if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+    if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+    return -1;
+}
+
+// ---- load-side decode (per string; local surrogate state) -------------------
+
+struct DecodeState {
+    unsigned hi = 0; // pending high surrogate
+};
+
+void emitCp(std::string& out, DecodeState& st, unsigned cp)
+{
+    if (cp >= 0xD800 && cp <= 0xDBFF) { st.hi = cp; return; }
+    if (cp >= 0xDC00 && cp <= 0xDFFF && st.hi != 0) {
+        cp = 0x10000u + ((st.hi - 0xD800u) << 10) + (cp - 0xDC00u);
+        st.hi = 0;
+    } else {
+        st.hi = 0;
+    }
     appendUtf8(out, cp);
 }
 
-static int hexDigit(char h)
+/// java.util.Properties.loadConvert for one logical string (key or value).
+/// Handles \t \n \r \f \\ \uXXXX (with UTF-16 surrogate pairing); any other
+/// escaped char decodes to itself.
+std::string decodeStr(const std::string& s)
 {
-    return (h >= '0' && h <= '9') ? h - '0'
-         : (h >= 'a' && h <= 'f') ? h - 'a' + 10
-         : (h >= 'A' && h <= 'F') ? h - 'A' + 10 : -1;
-}
-
-static std::string decodeOne(const std::string& s, size_t& i)
-{
-    const char e = s[++i];
     std::string out;
-    switch (e) {
-    case 't': out += '\t'; break;
-    case 'n': out += '\n'; break;
-    case 'r': out += '\r'; break;
-    case 'f': out += '\f'; break;
-    case 'u': {
-        bool ok = i + 4 < s.size();
-        unsigned cp = 0;
-        for (int k = 1; ok && k <= 4; ++k) {
-            const int d = hexDigit(s[i + k]);
-            if (d < 0) ok = false; else cp = cp * 16 + unsigned(d);
+    DecodeState st;
+    size_t i = 0;
+    const size_t n = s.size();
+    while (i < n) {
+        if (s[i] != '\\' || i + 1 >= n) {
+            out += s[i];
+            ++i;
+            continue;
         }
-        if (!ok) { out += 'u'; break; }
-        i += 4;
-        flushCp(out, cp);
-        break;
-    }
-    default: out += e; break;
+        const char e = s[++i];
+        switch (e) {
+        case 't': emitCp(out, st, '\t'); ++i; break;
+        case 'n': emitCp(out, st, '\n'); ++i; break;
+        case 'r': emitCp(out, st, '\r'); ++i; break;
+        case 'f': emitCp(out, st, '\f'); ++i; break;
+        case 'u': {
+            if (i + 4 >= n) { ++i; continue; }
+            unsigned cp = 0;
+            bool bad = false;
+            for (int k = 1; k <= 4; ++k) {
+                const int d = hexVal(s[i + k]);
+                if (d < 0) { bad = true; break; }
+                cp = cp * 16u + static_cast<unsigned>(d);
+            }
+            if (bad) { ++i; continue; }
+            i += 5;
+            emitCp(out, st, cp);
+            break;
+        }
+        default: emitCp(out, st, static_cast<unsigned char>(e)); ++i; break;
+        }
     }
     return out;
 }
 
-static std::string decodeEscapes(const std::string& s)
+// ---- save-side encode --------------------------------------------------------
+
+void escHex4(std::string& out, const unsigned unit)
 {
-    std::string out;
-    for (size_t i = 0; i < s.size(); ) {
-        if (s[i] == '\\' && i + 1 < s.size()) out += decodeOne(s, i);
-        else { out += s[i]; ++i; }
-    }
-    return out;
+    char b[8]{};
+    std::snprintf(b, sizeof b, "\\u%04x", unit & 0xFFFFu);
+    out += b;
 }
 
-static std::string saveConvert(const std::string& s, bool isKey)
+/// UTF-16-style emission (astral planes arrive as surrogate pairs, matching
+/// how Java Properties.store() writes them).
+void escUnicode(std::string& out, unsigned cp)
 {
-    unsigned hi = 0;
+    if (cp > 0xFFFF) {
+        const unsigned v = cp - 0x10000u;
+        escHex4(out, 0xD800u | (v >> 10));
+        escHex4(out, 0xDC00u | (v & 0x3FFu));
+    } else {
+        escHex4(out, cp);
+    }
+}
+
+/// One UTF-8 code point starting at s[i] -> cp; advances i. Lenient on
+/// malformed sequences (lead byte falls through as Latin-1 would).
+unsigned nextCp(const std::string& s, size_t& i)
+{
+    const auto b0 = static_cast<unsigned char>(s[i]);
+    size_t len = 1;
+    unsigned cp = b0;
+    if (b0 >= 0xF0 && i + 3 < s.size()) { cp = b0 & 7u; len = 4; }
+    else if (b0 >= 0xE0 && i + 2 < s.size()) { cp = b0 & 15u; len = 3; }
+    else if (b0 >= 0xC0 && i + 1 < s.size()) { cp = b0 & 31u; len = 2; }
+    bool ok = true;
+    for (size_t k = 1; k < len; ++k) {
+        const auto cc = static_cast<unsigned char>(s[i + k]);
+        if ((cc & 0xC0) != 0x80) { ok = false; break; }
+        cp = (cp << 6) | (cc & 0x3Fu);
+    }
+    i += len;
+    return ok ? cp : b0;
+}
+
+/// java.util.Properties.saveConvert. Keys additionally escape ALL spaces;
+/// values escape only a LEADING space.
+std::string encodeStr(const std::string& s, const bool isKey)
+{
     std::string out;
     out.reserve(s.size() * 2);
-    struct EscHelper {
-        std::string* o;
-        void operator()(unsigned v) const {
-            char b[8]{};
-            std::snprintf(b, sizeof b, "\\u%04x", v & 0xFFFF);
-            *o += b;
-        }
-    };
-    EscHelper escU{&out};
-    for (size_t i = 0; i < s.size(); ) {
-        const auto b0 = unsigned char(s[i]);
-        unsigned cp = b0; size_t len = 1;
-        if (b0 >= 0xF0 && i + 3 < s.size()) { cp = b0 & 7u; len = 4; }
-        else if (b0 >= 0xE0 && i + 2 < s.size()) { cp = b0 & 15u; len = 3; }
-        else if (b0 >= 0xC0 && i + 1 < s.size()) { cp = b0 & 31u; len = 2; }
-        bool bad = len > 1;
-        for (size_t k = 1; k < len; ++k) {
-            const auto cc = unsigned char(s[i+k]);
-            if ((cc & 0xC0) != 0x80) { bad = true; break; }
-            cp = (cp << 6) | (cc & 0x3F);
-        }
-        if (bad) cp = b0;
-        i += len;
-        if (hi) {
-            escU(hi); escU(cp); hi = 0; continue;
-        }
-        if (cp >= 0xD800 && cp <= 0xDBFF) { hi = cp; continue; }
+    bool firstCp = true;
+    size_t i = 0;
+    while (i < s.size()) {
+        const unsigned cp = nextCp(s, i);
+        bool handled = true;
         switch (cp) {
         case '\\': out += "\\\\"; break;
         case '\t': out += "\\t"; break;
         case '\n': out += "\\n"; break;
         case '\r': out += "\\r"; break;
         case '\f': out += "\\f"; break;
-        case ' ': out += isKey ? "\\ " : (out.empty() || out.back()=='\\' ? "\\ " : " "); break;
+        case ' ':
+            if (isKey || firstCp) out += '\\';
+            out += ' ';
+            break;
         case '=': [[fallthrough]];
         case ':': [[fallthrough]];
         case '#': [[fallthrough]];
-        case '!': out += '\\'; appendUtf8(out, cp); break;
-        default:
-            if (cp < 0x20 || cp > 0x7E) escU(cp); else out += char(cp);
+        case '!':
+            out += '\\';
+            out += static_cast<char>(cp);
+            break;
+        default: handled = false; break;
         }
+        if (!handled) {
+            if ((cp >= 0xD800 && cp <= 0xDFFF) || cp < 32 || cp > 126)
+                escUnicode(out, cp);
+            else
+                out += static_cast<char>(cp);
+        }
+        firstCp = false;
     }
     return out;
 }
 
+std::string nowIsoUtc()
+{
+    const auto t = std::time(nullptr);
+    std::tm tm{};
+    gmtime_r(&t, &tm);
+    char buf[40]{};
+    std::strftime(buf, sizeof buf, "%Y-%m-%dT%H:%M:%SZ", &tm);
+    return buf;
+}
 
-// ---- PropertiesCodec -------------------------------------------------------
+} // anonymous namespace
+
 
 PropertiesCodec::Map PropertiesCodec::parse(const std::string& raw)
 {
     Map out;
-    std::vector<std::string> logicals;
-    std::istringstream in(raw);
-    std::string phys, cur;
-    while (std::getline(in, phys)) {
-        if (!phys.empty() && phys.back() == '\r') phys.pop_back();
-        size_t bs = 0;
-        while (bs < phys.size() && phys[phys.size()-1-bs] == '\\') ++bs;
-        const bool cont = (bs % 2) == 1;
-        cur += cont ? phys.substr(0, phys.size()-1) : phys;
-        if (cont) continue;
-        size_t k = 0;
-        while (k < cur.size() && isSpaceCh(cur[k])) ++k;
-        logicals.push_back(cur.substr(k));
-        cur.clear();
-    }
-    if (!cur.empty()) logicals.push_back(cur);
 
-    for (const auto& lg : logicals) {
+    // 1) physical -> logical lines: odd trailing backslashes join the next one
+    std::vector<std::string> lines;
+    {
+        std::istringstream in(raw);
+        std::string phys, cur;
+        while (std::getline(in, phys)) {
+            if (!phys.empty() && phys.back() == '\r') phys.pop_back();
+            size_t bs = 0;
+            while (bs < phys.size() && phys[phys.size() - 1 - bs] == '\\')
+                ++bs;
+            const bool cont = (bs % 2) == 1;
+            cur.append(phys, 0, cont ? phys.size() - 1 : phys.size());
+            if (cont) continue;
+            lines.push_back(cur);
+            cur.clear();
+        }
+        if (!cur.empty()) lines.push_back(cur);
+    }
+
+    // 2) logical line -> (keyRaw, valRaw), java.util.Properties split rules
+    for (const auto& lg : lines) {
         size_t i = 0;
-        while (i < lg.size() && isSpaceCh(lg[i])) ++i;
+        while (i < lg.size() &&
+               (lg[i] == ' ' || lg[i] == '\t' || lg[i] == '\f'))
+            ++i;
         if (i >= lg.size() || lg[i] == '#' || lg[i] == '!') continue;
-        const size_t keyStart = i;
-        size_t sep = std::string::npos;
+
+        std::string keyRaw;
+        bool haveSep = false;
+        size_t afterSep = lg.size();
         while (i < lg.size()) {
             const char c = lg[i];
-            if (c == '\\') { i += 2; continue; }
-            if (c == '=' || c == ':') { sep = i; break; }
-            if (isSpaceCh(c)) {
-                size_t j = i;
-                while (j < lg.size() && isSpaceCh(lg[j])) ++j;
-                if (j < lg.size() && (lg[j] == '=' || lg[j] == ':')) sep = j;
+            if (c == '\\' && i + 1 < lg.size()) {
+                keyRaw += c;
+                keyRaw += lg[i + 1];
+                i += 2;
+                continue;
+            }
+            if (c == '=' || c == ':') {
+                haveSep = true;
+                afterSep = i + 1;
                 break;
             }
+            if (c == ' ' || c == '\t' || c == '\f') {
+                size_t j = i;
+                while (j < lg.size() && (lg[j] == ' ' || lg[j] == '\t' ||
+                                         lg[j] == '\f'))
+                    ++j;
+                if (j < lg.size() && (lg[j] == '=' || lg[j] == ':')) {
+                    haveSep = true;
+                    afterSep = j + 1;
+                } else {
+                    afterSep = j; // bare-ws split: value runs to EOL
+                }
+                break;
+            }
+            keyRaw += c;
             ++i;
         }
-        if (sep == std::string::npos || sep <= keyStart) continue;
-        std::string k = decodeEscapes(lg.substr(keyStart, sep - keyStart));
-        std::string v = decodeEscapes(lg.substr(sep + 1));
-        out.emplace(std::move(k), std::move(v));
+        if (keyRaw.empty()) continue;
+
+        std::string valRaw;
+        if (haveSep) {
+            size_t v = afterSep;
+            while (v < lg.size() && (lg[v] == ' ' || lg[v] == '\t' ||
+                                     lg[v] == '\f'))
+                ++v; // Java skips ws AFTER an explicit separator only
+            valRaw = lg.substr(v);
+        } else {
+            valRaw = lg.substr(afterSep);
+        }
+        out.emplace(decodeStr(keyRaw), decodeStr(valRaw));
     }
     return out;
 }
 
-std::string PropertiesCodec::serialize(const Map& props,
-                                       const std::string& comment,
-                                       const std::string& dateLine)
+std::string PropertiesCodec::serialize(
+    const Map& props,
+    const std::string& comment,
+    const std::string& dateLine)
 {
     std::ostringstream o;
     o << '#' << comment << '\n'
-      << (dateLine.empty() ? nowDateLine() : dateLine) << '\n';
-    for (const auto& [k, v] : props)
-        o << saveConvert(k, true) << '=' << saveConvert(v, false) << '\n';
+      << '#' << (dateLine.empty() ? nowIsoUtc() : dateLine) << '\n';
+    for (const auto& kv : props)
+        o << encodeStr(kv.first, true) << '='
+          << encodeStr(kv.second, false) << '\n';
     return o.str();
 }
 
-// ---- PropertiesStore -------------------------------------------------------
 
-PropertiesStore::PropertiesStore(std::filesystem::path f) : m_file(std::move(f)) {}
+PropertiesStore::PropertiesStore(std::filesystem::path file)
+    : m_file(std::move(file))
+{
+}
 
 std::filesystem::path PropertiesStore::defaultPath(std::string_view name)
 {
     namespace fs = std::filesystem;
     const char* cfg = std::getenv("XDG_CONFIG_HOME");
-    fs::path base = (cfg && *cfg && cfg[0]=='/')
-        ? fs::path(cfg)
-        : fs::path(std::getenv("HOME") ? std::getenv("HOME") : "") / ".config";
+    const char* home = std::getenv("HOME");
+    const fs::path base = (cfg && *cfg && cfg[0] == '/')
+                              ? fs::path(cfg)
+                              : fs::path(home != nullptr ? home : "") / ".config";
     return base / "nuvio-linux" / (std::string(name) + ".properties");
 }
 
@@ -215,91 +312,213 @@ void PropertiesStore::ensureLoaded()
     m_loaded = true;
     std::ifstream f(m_file, std::ios::binary);
     if (!f) return;
-    std::ostringstream ss; ss << f.rdbuf();
+    std::ostringstream ss;
+    ss << f.rdbuf();
     m_props = PropertiesCodec::parse(ss.str());
 }
 
-bool PropertiesStore::contains(std::string_view k)
-{ ensureLoaded(); return m_props.count(std::string(k)) > 0; }
-
-std::optional<std::string> PropertiesStore::getString(std::string_view k)
+bool PropertiesStore::contains(const std::string_view key)
 {
     ensureLoaded();
-    auto it = m_props.find(std::string(k));
-    return it == m_props.end() ? std::optional<std::string>{} : it->second;
+    return m_props.find(key) != m_props.end();
 }
 
-void PropertiesStore::putString(std::string_view k,
+std::optional<std::string> PropertiesStore::getString(const std::string_view key)
+{
+    ensureLoaded();
+    const auto it = m_props.find(key);
+    if (it == m_props.end()) return std::nullopt;
+    return it->second;
+}
+
+void PropertiesStore::putString(std::string_view key,
                                 const std::optional<std::string>& value)
 {
     ensureLoaded();
-    if (value) m_props.insert_or_assign(std::string(k), *value);
-    else m_props.erase(std::string(k));
+    if (value)
+        m_props.insert_or_assign(std::string(key), *value);
+    else
+        m_props.erase(std::string(key));
     persist();
 }
 
-std::optional<bool> PropertiesStore::getBoolean(std::string_view k)
+std::optional<bool> PropertiesStore::getBoolean(const std::string_view key)
 {
-    auto s = getString(k);
+    const auto s = getString(key);
     if (!s) return std::nullopt;
     if (*s == "true") return true;
     if (*s == "false") return false;
     return std::nullopt;
 }
 
-void PropertiesStore::putBoolean(std::string_view k, bool v)
-{ putString(k, v ? "true" : "false"); }
-
-std::optional<int32_t> PropertiesStore::getInt(std::string_view k)
+void PropertiesStore::putBoolean(std::string_view key, const bool value)
 {
-    auto s = getString(k);
+    putString(key, value ? "true" : "false");
+}
+
+std::optional<int32_t> PropertiesStore::getInt(const std::string_view key)
+{
+    const auto s = getString(key);
     if (!s) return std::nullopt;
-    try { size_t u=0; long long v=std::stoll(*s,&u); if(u==s->size()) return int32_t(v); }
-    catch(...) {}
+    try {
+        size_t used = 0;
+        const long long v = std::stoll(*s, &used);
+        if (used == s->size()) return static_cast<int32_t>(v);
+    } catch (...) {
+    }
     return std::nullopt;
 }
 
-void PropertiesStore::putInt(std::string_view k, int32_t v)
-{ putString(k, std::to_string(v)); }
-
-std::optional<float> PropertiesStore::getFloat(std::string_view k)
+void PropertiesStore::putInt(std::string_view key, const int32_t value)
 {
-    auto s = getString(k);
+    putString(key, std::to_string(value));
+}
+
+std::optional<float> PropertiesStore::getFloat(const std::string_view key)
+{
+    const auto s = getString(key);
     if (!s) return std::nullopt;
-    try { size_t u=0; float v=std::stof(*s,&u); if(u==s->size()) return v; }
-    catch(...) {}
+    try {
+        size_t used = 0;
+        const float v = std::stof(*s, &used);
+        if (used == s->size()) return v;
+    } catch (...) {
+    }
     return std::nullopt;
 }
 
-void PropertiesStore::putFloat(std::string_view k, float v)
-{ std::ostringstream o; o<<v; putString(k,o.str()); }
+void PropertiesStore::putFloat(std::string_view key, const float value)
+{
+    // Java's Float.toString produces the shortest repr that round-trips; the
+    // C++ ostream default matches it for all typical preference values.
+    std::ostringstream o;
+    o << value;
+    putString(key, o.str());
+}
 
-std::optional<std::vector<std::string>>
-PropertiesStore::getStringSet(std::string_view) { return std::nullopt; }
+// ---- Set<String>: kotlinx-style JSON array riding in one String value -------
 
-void PropertiesStore::putStringSet(std::string_view,
-                                   const std::vector<std::string>&) {}
+namespace {
 
-void PropertiesStore::remove(std::string_view k)
+// Defined in the unnamed-namespace block above; same unnamed namespace, so
+// this declaration binds to the existing definition.
+void escHex4(std::string& out, unsigned unit);
+
+std::string jsonEscape(const std::string& s)
+{
+    std::string o;
+    for (const char c : s) {
+        switch (c) {
+        case '"': o += "\\\""; break;
+        case '\\': o += "\\\\"; break;
+        case '\n': o += "\\n"; break;
+        case '\r': o += "\\r"; break;
+        case '\t': o += "\\t"; break;
+        default:
+            if (static_cast<unsigned char>(c) < 32) {
+                escHex4(o, static_cast<unsigned char>(c));
+            } else {
+                o += c;
+            }
+        }
+    }
+    return o;
+}
+
+bool jsonSkipWs(const std::string& s, size_t& i)
+{
+    while (i < s.size() &&
+           (s[i] == ' ' || s[i] == '\t' || s[i] == '\n' || s[i] == '\r'))
+        ++i;
+    return i < s.size();
+}
+
+} // namespace
+
+std::optional<std::vector<std::string>> PropertiesStore::getStringSet(
+    const std::string_view key)
+{
+    const auto s = getString(key);
+    if (!s) return std::nullopt;
+
+    std::vector<std::string> out;
+    size_t i = 0;
+    if (!jsonSkipWs(*s, i) || (*s)[i] != '[') return std::nullopt;
+    ++i;
+    if (!jsonSkipWs(*s, i)) return std::nullopt;
+    if ((*s)[i] == ']') return out; // empty set
+
+    while (true) {
+        if (!jsonSkipWs(*s, i) || (*s)[i] != '"') return std::nullopt;
+        ++i;
+        std::string item;
+        bool closed = false;
+        while (i < s->size()) {
+            const char c = (*s)[i];
+            if (c == '\\' && i + 1 < s->size()) {
+                const char e = (*s)[i + 1];
+                switch (e) {
+                case '"': item += '"'; break;
+                case '\\': item += '\\'; break;
+                case '/': item += '/'; break;
+                case 'n': item += '\n'; break;
+                case 't': item += '\t'; break;
+                case 'r': item += '\r'; break;
+                default: item += e; break;
+                }
+                i += 2;
+                continue;
+            }
+            if (c == '"') { closed = true; ++i; break; }
+            item += c;
+            ++i;
+        }
+        if (!closed) return std::nullopt;
+        out.push_back(std::move(item));
+        if (!jsonSkipWs(*s, i)) return std::nullopt;
+        if ((*s)[i] == ',') { ++i; continue; }
+        if ((*s)[i] == ']') return out;
+        return std::nullopt;
+    }
+}
+
+void PropertiesStore::putStringSet(std::string_view key,
+                                   const std::vector<std::string>& values)
+{
+    std::string j = "[";
+    for (size_t i = 0; i < values.size(); ++i) {
+        if (i != 0) j += ',';
+        j += '"';
+        j += jsonEscape(values[i]);
+        j += '"';
+    }
+    j += "]";
+    putString(key, j);
+}
+
+void PropertiesStore::remove(std::string_view key)
 {
     ensureLoaded();
-    m_props.erase(std::string(k));
+    m_props.erase(std::string(key));
     persist();
 }
 
 void PropertiesStore::persist()
 {
+    namespace fs = std::filesystem;
     std::error_code ec;
-    std::filesystem::create_directories(m_file.parent_path(), ec);
+    fs::create_directories(m_file.parent_path(), ec);
+
     const std::string data = PropertiesCodec::serialize(m_props);
-    const auto tmp = m_file.parent_path() /
-                     (m_file.filename().string()+".part");
-    { std::ofstream f(tmp, std::ios::binary|std::ios::trunc);
-      f.write(data.data(), std::streamsize(data.size())); }
+    const fs::path tmp =
+        m_file.parent_path() / (m_file.filename().string() + ".part");
+
+    {
+        std::ofstream f(tmp, std::ios::binary | std::ios::trunc);
+        f.write(data.data(), static_cast<std::streamsize>(data.size()));
+    }
     ::chmod(tmp.c_str(), 0600);
-    std::filesystem::rename(tmp, m_file, ec);
-    if (ec) { std::filesystem::remove(m_file, ec);
-              std::filesystem::rename(tmp, m_file); }
+    fs::rename(tmp, m_file, ec); // POSIX rename replaces atomically
     ::chmod(m_file.c_str(), 0600);
 }
 
