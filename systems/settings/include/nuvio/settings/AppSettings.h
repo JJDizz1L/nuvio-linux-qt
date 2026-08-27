@@ -23,6 +23,16 @@ class AppSettings final : public QObject {
     // torrent (store "torrent_settings", Compose-parity key "cache_size") ----
     Q_PROPERTY(QString torrentCacheSize READ torrentCacheSize
                    WRITE setTorrentCacheSize NOTIFY torrentCacheSizeChanged)
+    // player track preferences ("settings" store; keys are Qt-line-local,
+    // upstream Compose persists these inside an opaque blob - migrate at P4)
+    Q_PROPERTY(QString preferredAudioLanguage READ preferredAudioLanguage
+                   WRITE setPreferredAudioLanguage NOTIFY
+                       preferredAudioLanguageChanged)
+    Q_PROPERTY(QString preferredSubtitleLanguage READ preferredSubtitleLanguage
+                   WRITE setPreferredSubtitleLanguage NOTIFY
+                       preferredSubtitleLanguageChanged)
+    Q_PROPERTY(bool useForcedSubtitles READ useForcedSubtitles
+                   WRITE setUseForcedSubtitles NOTIFY useForcedSubtitlesChanged)
 
 public:
     explicit AppSettings(QObject* parent = nullptr);
@@ -39,11 +49,24 @@ public:
     [[nodiscard]] QString torrentCacheSize() const;
     void                  setTorrentCacheSize(const QString& v);
 
+    // Track-preference language selectors. Values are option words
+    // ("device"/"original"/"none"/"forced") or normalized codes
+    // (en, pt-BR, ...). Defaults mirror Compose: audio=device, subs=none.
+    [[nodiscard]] QString preferredAudioLanguage() const;
+    void setPreferredAudioLanguage(const QString& v);
+    [[nodiscard]] QString preferredSubtitleLanguage() const;
+    void setPreferredSubtitleLanguage(const QString& v);
+    [[nodiscard]] bool    useForcedSubtitles() const;
+    void                  setUseForcedSubtitles(bool v);
+
 signals:
     void darkThemeChanged();
     void decoderModeChanged();
     void cacheMbChanged();
     void torrentCacheSizeChanged();
+    void preferredAudioLanguageChanged();
+    void preferredSubtitleLanguageChanged();
+    void useForcedSubtitlesChanged();
 
 private:
     class Store;

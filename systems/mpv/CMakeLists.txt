@@ -1,6 +1,8 @@
 # systems/mpv — THE video system. Sole owner of anything libmpv (plan §7):
 # every mpv_* symbol referenced in the entire process lives under this dir.
 add_library(nuvio_mpv STATIC
+    include/nuvio/mpv/TrackSelection.h   src/TrackSelection.cpp
+    include/nuvio/mpv/TrackAutoSelector.h src/TrackAutoSelector.cpp
     include/nuvio/mpv/MpvTypes.h
     include/nuvio/mpv/HwdecPolicy.h    src/HwdecPolicy.cpp
     include/nuvio/mpv/MpvUserConfig.h  src/MpvUserConfig.cpp

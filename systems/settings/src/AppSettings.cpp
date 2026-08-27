@@ -13,6 +13,11 @@ constexpr auto kDarkTheme  = "theme_dark";
 constexpr auto kDecoder    = "decoder_mode";
 constexpr auto kCacheMb    = "stream_cache_size";   // exact Compose key; unit (MB) verified during parity pass
 constexpr auto kTorrentCacheSize = "cache_size";    // exact Compose key in store "torrent_settings"
+// Track prefs (Qt-line-local spellings; upstream blob parity = P4 task)
+constexpr auto kPrefAudio     = "pref_audio_lang";
+constexpr auto kPrefSub       = "pref_sub_lang";
+constexpr auto kPrefSubtitle  = "pref_sub_lang";
+constexpr auto kForcedSubs    = "use_forced_subs";
 } // namespace
 
 class AppSettings::Store final {
@@ -96,6 +101,46 @@ void AppSettings::setTorrentCacheSize(const QString& v)
     if (torrentCacheSize() == v) return;
     m_torrentStore->props.putString(keys::kTorrentCacheSize, bytes);
     emit torrentCacheSizeChanged();
+}
+
+// ---- player track preferences ---------------------------------------------
+
+QString AppSettings::preferredAudioLanguage() const
+{
+    return QString::fromStdString(
+        m_store->props.getString(keys::kPrefAudio).value_or("device"));
+}
+
+void AppSettings::setPreferredAudioLanguage(const QString& v)
+{
+    if (preferredAudioLanguage() == v) return;
+    m_store->props.putString(keys::kPrefAudio, v.toStdString());
+    emit preferredAudioLanguageChanged();
+}
+
+QString AppSettings::preferredSubtitleLanguage() const
+{
+    return QString::fromStdString(
+        m_store->props.getString(keys::kPrefSub).value_or("none"));
+}
+
+void AppSettings::setPreferredSubtitleLanguage(const QString& v)
+{
+    if (preferredSubtitleLanguage() == v) return;
+    m_store->props.putString(keys::kPrefSub, v.toStdString());
+    emit preferredSubtitleLanguageChanged();
+}
+
+bool AppSettings::useForcedSubtitles() const
+{
+    return m_store->props.getBoolean(keys::kForcedSubs).value_or(true);
+}
+
+void AppSettings::setUseForcedSubtitles(bool v)
+{
+    if (useForcedSubtitles() == v) return;
+    m_store->props.putBoolean(keys::kForcedSubs, v);
+    emit useForcedSubtitlesChanged();
 }
 
 } // namespace nuvio::settings

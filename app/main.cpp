@@ -8,6 +8,8 @@
 #include <cstdio>
 #include <memory>
 
+#include <QLocale>
+
 #include <mpv/client.h>
 
 #include "bootstrap/LogCategories.h"
@@ -17,6 +19,7 @@
 #include "nuvio/mpv/MpvController.h"
 #include "nuvio/mpv/MpvLog.h"
 #include "nuvio/mpv/MpvQuickItem.h"
+#include "nuvio/mpv/TrackAutoSelector.h"
 #include "nuvio/authsync/AuthService.h"
 #include "nuvio/library/AddonRegistry.h"
 #include "nuvio/library/CatalogService.h"
@@ -147,6 +150,31 @@ int main(int argc, char* argv[])
                              qPrintable(best.value("url").toString()),
                              qPrintable(best.value("source").toString()));
         });
+    // Explicit track selection (NO alang/slang — AGENTS.md masked-failure
+    // rule): policy runs on FILE_LOADED with applied-latches per tier; the
+    // controller's queued command path executes the aid/sid sets.
+    auto trackSelector = std::make_unique<nuvio::mpv::TrackAutoSelector>();
+    QObject::connect(controller.get(), &nuvio::mpv::MpvController::fileLoaded,
+                     trackSelector.get(),
+                     &nuvio::mpv::TrackAutoSelector::handleFileLoaded);
+    QObject::connect(
+        controller.get(), &nuvio::mpv::MpvController::trackListChanged,
+        trackSelector.get(), &nuvio::mpv::TrackAutoSelector::handleTracks);
+    trackSelector->setPreferencesProvider([sp = settings.get()] {
+        nuvio::mpv::tracksel::LanguagePrefs p;
+        p.preferredAudio      = sp->preferredAudioLanguage();
+        p.preferredSubtitle   = sp->preferredSubtitleLanguage();
+        // Device-language leg of the target chain (Compose's
+        // DeviceLanguagePreferences expect-actual); most preferred first.
+        for (const QString& lang : QLocale::system().uiLanguages())
+            p.deviceLanguages.append(lang);
+        return p;
+    });
+    QObject::connect(trackSelector.get(),
+                     &nuvio::mpv::TrackAutoSelector::commandReady,
+                     controller.get(), [cp = controller.get()](QStringList a) {
+                         cp->enqueueCommand(a);
+                     });
     auth->restoreSession();
     catalog->loadShelves();     // stored tokens -> active or silent refresh
 
