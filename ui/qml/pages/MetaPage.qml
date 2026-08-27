@@ -195,7 +195,7 @@ Item {
                 delegate: Item {
                     required property var modelData
                     width: ListView.view.width
-                    height: 44
+                    height: 66
 
                     Rectangle {
                         anchors.fill: parent
@@ -210,21 +210,48 @@ Item {
                         cursorShape: Qt.PointingHandCursor
                         onClicked: detail.playEpisode(modelData)
                     }
-                    Text {
+                    Image {
+                        id: epThumb
                         x: Theme.spacingMd
                         anchors.verticalCenter: parent.verticalCenter
-                        width: parent.width - Theme.spacingMd*2 - 48
-                        text: "E" + modelData.episode + "   "
-                              + (modelData.name || "")
-                        color: Theme.textPrimary
-                        font.pixelSize: 13
-                        elide: Text.ElideRight
+                        width: 104
+                        height: 58
+                        fillMode: Image.PreserveAspectCrop
+                        asynchronous: true
+                        clip: true
+                        source: modelData.thumb || ""
+                        visible: source.length > 0
+                    }
+                    Column {
+                        x: (epThumb.visible
+                                ? epThumb.x + epThumb.width
+                                : Theme.spacingMd) + Theme.spacingMd
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: parent.width - x - 56
+                        spacing: 3
+                        Text {
+                            width: parent.width
+                            text: "E" + modelData.episode + "   "
+                                  + (modelData.name || "")
+                            color: Theme.textPrimary
+                            font.pixelSize: 13
+                            elide: Text.ElideRight
+                        }
+                        Text {
+                            width: parent.width
+                            text: modelData.description || ""
+                            color: Theme.textSecondary
+                            font.pixelSize: 11
+                            maximumLineCount: 1
+                            elide: Text.ElideRight
+                            visible: text.length > 0
+                        }
                     }
                     Text {
                         anchors.right: parent.right
                         anchors.rightMargin: Theme.spacingMd
                         anchors.verticalCenter: parent.verticalCenter
-                        text: "▶"
+                        text: "\u25B6"
                         color: Theme.accent
                         font.pixelSize: 14
                     }
