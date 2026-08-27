@@ -6,6 +6,8 @@ add_library(nuvio_watching STATIC
     src/WatchProgress.cpp
     include/nuvio/watching/WatchCodec.h
     src/WatchCodec.cpp
+    include/nuvio/watching/ContinueWatchingPrefs.h
+    src/ContinueWatchingPrefs.cpp
     include/nuvio/watching/WatchingStore.h
     src/WatchingStore.cpp
     include/nuvio/watching/ProgressSyncCodec.h
@@ -26,3 +28,8 @@ add_executable(nuvio_watching_tests tests/WatchingTests.cpp)
 target_link_libraries(nuvio_watching_tests PRIVATE nuvio::watching Qt6::Core)
 nuvio_common_target_props(nuvio_watching_tests)
 add_test(NAME nuvio_watching_watchstate COMMAND nuvio_watching_tests)
+
+add_executable(nuvio_cw_prefs_tests tests/ContinueWatchingPrefsTests.cpp)
+target_link_libraries(nuvio_cw_prefs_tests PRIVATE nuvio::watching Qt6::Core)
+nuvio_common_target_props(nuvio_cw_prefs_tests)
+add_test(NAME nuvio_cw_prefs COMMAND nuvio_cw_prefs_tests)
