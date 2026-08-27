@@ -1,9 +1,13 @@
 // Offline contract for the TorrServer wire/policy layer. Fixtures are the
 // real JSON shapes + the Compose line's magnet test vectors - parity is the
 // point: identical input MUST produce identical wire bytes.
+#include <nuvio/p2p/TorrServerProcess.h>
 #include <nuvio/p2p/TorrServerProtocol.h>
 
 #include <QCoreApplication>
+#include <QDir>
+#include <QFile>
+#include <QTemporaryDir>
 #include <cstdio>
 
 using namespace nuvio::p2p;
@@ -148,6 +152,41 @@ int main(int argc, char** argv)
               "GB_10");
         CHECK(toTorrServerCacheMb(QStringLiteral("garbage")) == 2048,
               "unknown falls back to default, never smaller");
+    }
+
+    { // server-binary resolution order (env override > CWD candidates)
+        QTemporaryDir sandbox;
+        CHECK(sandbox.isValid(), "resolver sandbox");
+        const QString savedCwd = QDir::currentPath();
+        const QString savedCache =
+            qEnvironmentVariable("XDG_CACHE_HOME"); // QString
+
+        // env override wins verbatim
+        const QString fake = QDir(sandbox.path()).filePath("fake-ts");
+        { QFile f(fake); CHECK(f.open(QIODevice::WriteOnly), "fake written"); }
+        qputenv("NUVIO_TORRSERVER_BINARY", fake.toUtf8());
+        CHECK(resolveServerBinaryPath() == fake, "env override wins");
+        qunsetenv("NUVIO_TORRSERVER_BINARY");
+
+        // CWD-relative build-tree candidate, cache-home isolated to sandbox
+        qputenv("XDG_CACHE_HOME",
+                QDir(sandbox.path()).filePath("cache").toUtf8());
+        const QString cwdRoot = QDir(sandbox.path()).filePath("cwd");
+        QDir().mkpath(QDir(cwdRoot).filePath(
+            "build/native/torrserver/linux-amd64"));
+        QFile bin(QDir(cwdRoot).filePath(
+            "build/native/torrserver/linux-amd64/TorrServer"));
+        CHECK(bin.open(QIODevice::WriteOnly), "candidate written");
+        bin.close();
+        CHECK(QDir::setCurrent(cwdRoot), "chdir sandbox");
+        const QString resolved = resolveServerBinaryPath();
+        CHECK(resolved.endsWith(QLatin1String(
+                  "build/native/torrserver/linux-amd64/TorrServer")),
+              "CWD candidate resolved");
+        CHECK(QDir::setCurrent(savedCwd), "chdir back");
+
+        if (savedCache.isEmpty()) qunsetenv("XDG_CACHE_HOME");
+        else qputenv("XDG_CACHE_HOME", savedCache.toUtf8());
     }
 
     std::printf(failures ? "P2P SUITE FAILURES=%d\n"

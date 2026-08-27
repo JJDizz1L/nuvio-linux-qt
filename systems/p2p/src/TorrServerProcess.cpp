@@ -1,5 +1,6 @@
 #include "nuvio/p2p/TorrServerProcess.h"
 
+#include <QCoreApplication>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -30,15 +31,28 @@ QString resolveServerBinaryPath()
         return env.isEmpty() ? QDir::homePath() + QStringLiteral("/.cache")
                              : env;
     }();
-    const QStringList candidates{
-        QStringLiteral("nuvio-linux-qt/build/native/torrserver/linux-amd64/TorrServer"),
-        QStringLiteral("build/native/torrserver/linux-amd64/TorrServer"),
-        QStringLiteral("vendor/TorrServer/dist/TorrServer-linux-amd64"),
-        QStringLiteral("vendor/TorrServer/dist/TorrServer"),
-        // repo-checked-in GOAMD64=v1 binary (git-lfs): free dev-run candidate
-        QStringLiteral("composeApp/src/desktopMain/resources/torrserver/linux-amd64/TorrServer"),
-        cacheHome + QStringLiteral("/nuvio-linux/torrserver/bin/TorrServer"),
-    };
+    // 2. CWD-independent app-dir candidates: packaged layout (binary next
+    //    to the app) and the build-tree bundle (app/ -> ../native/...).
+    QStringList candidates = [appDir = QCoreApplication::applicationDirPath()] {
+        QStringList c;
+        if (!appDir.isEmpty()) {
+            c << QDir(appDir).filePath(QStringLiteral("TorrServer"))
+              << QDir(appDir).filePath(QStringLiteral(
+                     "../native/torrserver/linux-amd64/TorrServer"));
+        }
+        c << QStringLiteral(
+                   "nuvio-linux-qt/build/native/torrserver/linux-amd64/TorrServer")
+          << QStringLiteral(
+                   "build/native/torrserver/linux-amd64/TorrServer")
+          << QStringLiteral("vendor/TorrServer/dist/TorrServer-linux-amd64")
+          << QStringLiteral("vendor/TorrServer/dist/TorrServer")
+          // repo-checked-in GOAMD64=v1 binary (git-lfs): free dev-run candidate
+          << QStringLiteral("composeApp/src/desktopMain/resources/torrserver/"
+                            "linux-amd64/TorrServer");
+        return c;
+    }();
+    candidates << cacheHome +
+            QStringLiteral("/nuvio-linux/torrserver/bin/TorrServer");
     for (const QString& c : candidates)
         if (QFileInfo::exists(c)) return c;
     return {};
