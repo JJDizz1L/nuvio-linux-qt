@@ -27,6 +27,8 @@
 #include "nuvio/mpv/TrackAutoSelector.h"
 #include "nuvio/authsync/AuthService.h"
 #include "nuvio/library/AddonRegistry.h"
+#include "nuvio/settings/PropertiesStore.h"
+#include "nuvio/settings/SyncIdentity.h"
 #include "nuvio/library/CatalogService.h"
 #include "nuvio/library/MetaService.h"
 #include "nuvio/playback/PlaybackSession.h"
@@ -115,6 +117,19 @@ int main(int argc, char* argv[])
     // mpv core joins (QML is already dead by then either way).
     auto navigation = std::make_unique<nuvio::ui::NavigationModel>();
     auto auth       = std::make_unique<nuvio::authsync::AuthService>();
+
+    // Device identity for future profile sync (Compose SyncClientIdentity
+    // parity): ensure a valid client_instance_id exists before any auth or
+    // sync traffic. First run generates; later runs adopt.
+    {
+        nuvio::settings::PropertiesStore idStore(
+            nuvio::settings::PropertiesStore::defaultPath("sync_client_identity"));
+        const QString clientId =
+            nuvio::settings::SyncIdentity::currentClientId(idStore);
+        qCInfo(lcNuvioAppModules).noquote()
+            << "sync identity ready:" << clientId;
+    }
+
     auto settings   = std::make_unique<nuvio::settings::AppSettings>();
     auto catalog    = std::make_unique<nuvio::library::CatalogService>();
     auto metaSvc    = std::make_unique<nuvio::library::MetaService>();
