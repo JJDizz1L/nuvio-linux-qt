@@ -22,6 +22,7 @@
 #include <QTimer>
 #include <QObject>
 #include <QString>
+#include <functional>
 
 #include "nuvio/p2p/TorrServerProtocol.h"
 
@@ -45,6 +46,12 @@ public:
     /// Drop the current torrent; schedule idle binary stop.
     Q_INVOKABLE void stopStream();
 
+    /// Wire the current "Torrent cache size" setting; consulted once per
+    /// startStream right after the binary comes up and BEFORE the torrent
+    /// is added (Compose parity - store-without-send was a real bug there:
+    /// pushing /settings first is what makes the setting real).
+    void setCacheSizeProvider(std::function<int()> provider);
+
     /// GET-modify-POST the RAM piece-cache size against /settings
     /// (call once per freshly started binary; noop on network failure).
     Q_INVOKABLE void applyCacheSettings(int cacheMb);
@@ -57,8 +64,11 @@ signals:
                       int peers, int seeds);
 
 private:
+    bool requestWait(QNetworkReply* rep, QByteArray* responseOut);
     bool postJson(const QString& path, const QByteArray& body,
                   QByteArray* responseOut);
+    bool getJson(const QString& path, QByteArray* responseOut);
+    bool applyCacheSync(int cacheMb);   ///< fetch-modify-post, blocking-bounded
     void beginSession(quint64 gen, const QString& magnet, const QString& filename);
     void awaitMetadata(quint64 gen, const QString& hash, const QString& magnet,
                        const QString& filename, int attemptsLeft);
@@ -66,6 +76,7 @@ private:
 
     TorrServerProcess* m_binary = nullptr;
     QNetworkAccessManager* m_api = nullptr;
+    std::function<int()> m_cacheMbProvider;
 
     quint64 m_generation = 0;
     QString m_activeHash;

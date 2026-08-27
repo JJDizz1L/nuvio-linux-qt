@@ -89,4 +89,10 @@ parseTorrentStats(const QByteArray& body);
                                       int cacheMb,
                                       QByteArray* updatedOut);
 
+/// "Torrent cache size" enum-name -> TorrServer RAM piece-cache MB.
+/// Exact Compose-line mapping: NONE->64, GB_2->2048, GB_5->5120,
+/// GB_10->10240. Unknown names fall back to the GB_2 default so a stale or
+/// foreign stored value can never de-grade to "no cache".
+[[nodiscard]] int toTorrServerCacheMb(const QString& cacheSizeEnumName);
+
 } // namespace nuvio::p2p

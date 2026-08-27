@@ -200,4 +200,12 @@ bool mergeCacheSettings(const QByteArray& currentSettingsJson, int cacheMb,
     return true;
 }
 
+int toTorrServerCacheMb(const QString& cacheSizeEnumName)
+{
+    if (cacheSizeEnumName == QLatin1String("NONE")) return 64;
+    if (cacheSizeEnumName == QLatin1String("GB_5")) return 5120;
+    if (cacheSizeEnumName == QLatin1String("GB_10")) return 10240;
+    return 2048;   // "GB_2" AND any unknown/stale value -> Compose default
+}
+
 } // namespace nuvio::p2p

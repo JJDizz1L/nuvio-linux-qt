@@ -20,6 +20,9 @@ class AppSettings final : public QObject {
     Q_PROPERTY(QString decoderMode READ decoderMode WRITE setDecoderMode
                    NOTIFY decoderModeChanged)
     Q_PROPERTY(int cacheMb READ cacheMb WRITE setCacheMb NOTIFY cacheMbChanged)
+    // torrent (store "torrent_settings", Compose-parity key "cache_size") ----
+    Q_PROPERTY(QString torrentCacheSize READ torrentCacheSize
+                   WRITE setTorrentCacheSize NOTIFY torrentCacheSizeChanged)
 
 public:
     explicit AppSettings(QObject* parent = nullptr);
@@ -31,14 +34,23 @@ public:
     [[nodiscard]] int     cacheMb() const;
     void                  setCacheMb(int v);
 
+    /// One of NONE | GB_2 | GB_5 | GB_10 (Compose P2pCacheSize enum names,
+    /// default GB_2). Stored in the separate "torrent_settings" store.
+    [[nodiscard]] QString torrentCacheSize() const;
+    void                  setTorrentCacheSize(const QString& v);
+
 signals:
     void darkThemeChanged();
     void decoderModeChanged();
     void cacheMbChanged();
+    void torrentCacheSizeChanged();
 
 private:
     class Store;
     Store* m_store;   // PIMPL: keeps Qt-private includes out of the header
+
+    class TorrentStore;
+    TorrentStore* m_torrentStore;
 };
 
 } // namespace nuvio::settings

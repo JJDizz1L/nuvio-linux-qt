@@ -35,6 +35,8 @@ QString resolveServerBinaryPath()
         QStringLiteral("build/native/torrserver/linux-amd64/TorrServer"),
         QStringLiteral("vendor/TorrServer/dist/TorrServer-linux-amd64"),
         QStringLiteral("vendor/TorrServer/dist/TorrServer"),
+        // repo-checked-in GOAMD64=v1 binary (git-lfs): free dev-run candidate
+        QStringLiteral("composeApp/src/desktopMain/resources/torrserver/linux-amd64/TorrServer"),
         cacheHome + QStringLiteral("/nuvio-linux/torrserver/bin/TorrServer"),
     };
     for (const QString& c : candidates)

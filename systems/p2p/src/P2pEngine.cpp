@@ -40,6 +40,11 @@ P2pEngine::P2pEngine(TorrServerProcess* binary, QObject* parent)
             [this] { m_binary->stop(); });
 }
 
+void P2pEngine::setCacheSizeProvider(std::function<int()> provider)
+{
+    m_cacheMbProvider = std::move(provider);
+}
+
 quint64 P2pEngine::startStream(const QString& infoHash,
                                const QString& filename)
 {
@@ -77,6 +82,15 @@ quint64 P2pEngine::startStream(const QString& infoHash,
 void P2pEngine::beginSession(quint64 gen, const QString& magnet,
                              const QString& filename)
 {
+    // The user's cache-size setting MUST reach /settings before the torrent
+    // is added - a stored-but-never-sent value is dead UI (real Compose bug,
+    // 2026-08-20). Failure to apply proceeds anyway (Compose parity: warn +
+    // continue); TorrServer then keeps its built-in default.
+    if (m_cacheMbProvider) {
+        const int cacheMb = m_cacheMbProvider();
+        if (cacheMb > 0) applyCacheSync(cacheMb);
+    }
+
     QByteArray reply;
     if (!postJson(QStringLiteral("/torrents"),
                   addTorrentRequestBody(magnet), &reply)) {
@@ -173,6 +187,45 @@ void P2pEngine::applyCacheSettings(int cacheMb)
     });
 }
 
+bool P2pEngine::getJson(const QString& path, QByteArray* responseOut)
+{
+    QNetworkRequest req{QUrl(m_binary->baseUrl() + path)};
+    req.setTransferTimeout(10000);
+    QNetworkReply* rep = m_api->get(req);
+    return requestWait(rep, responseOut);
+}
+
+bool P2pEngine::applyCacheSync(int cacheMb)
+{
+    QByteArray current;
+    if (!getJson(QStringLiteral("/settings"), &current)) return false;
+    QByteArray updated;
+    if (!mergeCacheSettings(current, cacheMb, &updated)) return false;
+    return postJson(QStringLiteral("/settings"), updated, nullptr);
+}
+
+bool P2pEngine::requestWait(QNetworkReply* rep, QByteArray* responseOut)
+{
+    // Time-boxed local event loop (30 s wall = Compose's request timeout).
+    // Nested but strictly bounded; engine continuations are the only
+    // callers, never QML entry points.
+    QEventLoop loop;
+    QObject::connect(rep, &QNetworkReply::finished, &loop, &QEventLoop::quit);
+    QTimer watchdog;
+    watchdog.setSingleShot(true);
+    QObject::connect(&watchdog, &QTimer::timeout, &loop, &QEventLoop::quit);
+    watchdog.start(30000);
+    loop.exec();
+    rep->deleteLater();
+
+    const int status =
+        rep->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+    const bool ok = rep->error() == QNetworkReply::NoError
+                 && status >= 200 && status < 300;
+    if (ok && responseOut) *responseOut = rep->readAll();
+    return ok;
+}
+
 bool P2pEngine::postJson(const QString& path, const QByteArray& body,
                          QByteArray* responseOut)
 {
@@ -185,22 +238,7 @@ bool P2pEngine::postJson(const QString& path, const QByteArray& body,
     req.setHeader(QNetworkRequest::ContentTypeHeader,
                   QStringLiteral("application/json"));
     QNetworkReply* rep = m_api->post(req, body);
-
-    QEventLoop loop;
-    QObject::connect(rep, &QNetworkReply::finished, &loop, &QEventLoop::quit);
-    QTimer watchdog;
-    watchdog.setSingleShot(true);
-    QObject::connect(&watchdog, &QTimer::timeout, &loop, &QEventLoop::quit);
-    watchdog.start(30000);
-    loop.exec();                             // nested but strictly time-boxed
-    rep->deleteLater();
-
-    const int status =
-        rep->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
-    const bool ok = rep->error() == QNetworkReply::NoError
-                 && status >= 200 && status < 300;
-    if (ok && responseOut) *responseOut = rep->readAll();
-    return ok;
+    return requestWait(rep, responseOut);
 }
 
 void P2pEngine::failToken(quint64 gen, const QString& reason)

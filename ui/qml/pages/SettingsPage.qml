@@ -107,6 +107,43 @@ Item {
             }
         }
 
+        // ---- torrent: cache size ------------------------------------------------
+        Column {
+            width: parent.width
+            spacing: 4
+            Text {
+                text: qsTr("Torrent cache size")
+                color: Theme.textPrimary
+                font.pixelSize: 15
+            }
+            ComboBox {
+                width: parent.width * 0.6
+                textRole: "label"
+                model: [
+                    { label: qsTr("Off (64 MB floor)"), value: "NONE" },
+                    { label: qsTr("2 GB"),              value: "GB_2" },
+                    { label: qsTr("5 GB"),              value: "GB_5" },
+                    { label: qsTr("10 GB"),             value: "GB_10" }
+                ]
+                currentIndex: {
+                    const vals = ["NONE", "GB_2", "GB_5", "GB_10"]
+                    const i = vals.indexOf(appsettings.torrentCacheSize)
+                    return i >= 0 ? i : 1            // GB_2 default
+                }
+                onActivated: function(i) {
+                    appsettings.torrentCacheSize = model[i].value
+                }
+            }
+            Text {
+                text: qsTr("RAM piece cache pushed to TorrServer before each "
+                           + "torrent starts; shares the Compose-line profile key.")
+                color: Theme.textDisabled
+                font.pixelSize: 11
+                wrapMode: Text.Wrap
+                width: parent.width
+            }
+        }
+
         Text {
             text: qsTr("Values persist to the shared Nuvio profile "
                        + "(~/.config/nuvio-linux).")

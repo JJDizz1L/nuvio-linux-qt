@@ -82,6 +82,66 @@ Item {
     readonly property bool idleChrome:
         mpv.hasMedia && (overlay.now - overlay.lastActivity) > 3500
 
+    // ---- torrent download telemetry -----------------------------------------
+    // Display-layer only: mirrors statsUpdated from the p2p engine with a
+    // 3 s staleness fade. Nothing here may influence media timing.
+    QtObject {
+        id: tor
+        property double downBps: 0
+        property int    peers: 0
+        property int    seeds: 0
+        property double preloaded: 0
+        property double total: 0
+        property double lastSeen: -1e9
+        property double now: 0                  // seconds, monotonic-ish
+    }
+    Timer {
+        interval: 500
+        running: true
+        repeat: true
+        onTriggered: tor.now += interval / 1000.0
+    }
+    Connections {
+        target: p2p
+        function onStatsUpdated(token, preloadedBytes, torrentSize,
+                                downloadSpeedBps, peers, seeds) {
+            tor.downBps   = downloadSpeedBps
+            tor.peers     = peers
+            tor.seeds     = seeds
+            tor.preloaded = preloadedBytes
+            tor.total     = torrentSize
+            tor.lastSeen  = tor.now
+        }
+    }
+    function fmtSpeed(bps) {
+        if (bps >= 1048576) return (bps / 1048576).toFixed(1) + " MB/s"
+        if (bps >= 1024)    return (bps / 1024).toFixed(0) + " KB/s"
+        return bps.toFixed(0) + " B/s"
+    }
+
+    Rectangle {
+        visible: mpv.hasMedia && (tor.now - tor.lastSeen) < 3 && tor.total > 0
+        width: torText.width + 24
+        height: torText.height + 12
+        radius: Theme.radiusMd
+        color: Theme.chromeScrim
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.bottom: bar.top
+        anchors.bottomMargin: 10
+
+        Text {
+            id: torText
+            anchors.centerIn: parent
+            color: Theme.textSecondary
+            font.pixelSize: 11
+            text: qsTr("torrent %1 · buffer %2% · %3 seeders / %4 peers")
+                .arg(fmtSpeed(tor.downBps))
+                .arg(tor.total > 0 ? Math.round(100 * tor.preloaded / tor.total) : 0)
+                .arg(tor.seeds)
+                .arg(tor.peers)
+        }
+    }
+
     TransportBar {
         id: bar
         mpv: mpv

@@ -138,6 +138,18 @@ int main(int argc, char** argv)
     }
 
 
+    { // cache-size enum mapping (exact Compose numbers)
+        CHECK(toTorrServerCacheMb(QStringLiteral("NONE")) == 64,
+              "NONE floor");
+        CHECK(toTorrServerCacheMb(QStringLiteral("GB_2")) == 2048,
+              "GB_2 default");
+        CHECK(toTorrServerCacheMb(QStringLiteral("GB_5")) == 5120, "GB_5");
+        CHECK(toTorrServerCacheMb(QStringLiteral("GB_10")) == 10240,
+              "GB_10");
+        CHECK(toTorrServerCacheMb(QStringLiteral("garbage")) == 2048,
+              "unknown falls back to default, never smaller");
+    }
+
     std::printf(failures ? "P2P SUITE FAILURES=%d\n"
                          : "P2P SUITE OK (%d failures)\n",
                 failures);

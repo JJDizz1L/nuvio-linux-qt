@@ -12,6 +12,7 @@ namespace keys {
 constexpr auto kDarkTheme  = "theme_dark";
 constexpr auto kDecoder    = "decoder_mode";
 constexpr auto kCacheMb    = "stream_cache_size";   // exact Compose key; unit (MB) verified during parity pass
+constexpr auto kTorrentCacheSize = "cache_size";    // exact Compose key in store "torrent_settings"
 } // namespace
 
 class AppSettings::Store final {
@@ -19,8 +20,15 @@ public:
     PropertiesStore props{PropertiesStore::defaultPath("settings")};
 };
 
+class AppSettings::TorrentStore final {
+public:
+    PropertiesStore props{PropertiesStore::defaultPath("torrent_settings")};
+};
+
 AppSettings::AppSettings(QObject* parent)
-    : QObject(parent), m_store(new Store)
+    : QObject(parent),
+      m_store(new Store),
+      m_torrentStore(new TorrentStore)
 {
 }
 
@@ -62,6 +70,32 @@ void AppSettings::setCacheMb(int v)
     if (cacheMb() == v) return;
     m_store->props.putInt(keys::kCacheMb, v);
     emit cacheMbChanged();
+}
+
+// ---- torrent settings (separate "torrent_settings" store) -----------------
+
+namespace {
+bool validTorrentCacheSize(const std::string& s)
+{
+    return s == "NONE" || s == "GB_2" || s == "GB_5" || s == "GB_10";
+}
+} // namespace
+
+QString AppSettings::torrentCacheSize() const
+{
+    const auto raw = m_torrentStore->props.getString(keys::kTorrentCacheSize);
+    if (!raw || !validTorrentCacheSize(*raw))
+        return QStringLiteral("GB_2");          // Compose default
+    return QString::fromStdString(*raw);
+}
+
+void AppSettings::setTorrentCacheSize(const QString& v)
+{
+    const std::string bytes = v.toStdString();
+    if (!validTorrentCacheSize(bytes)) return;
+    if (torrentCacheSize() == v) return;
+    m_torrentStore->props.putString(keys::kTorrentCacheSize, bytes);
+    emit torrentCacheSizeChanged();
 }
 
 } // namespace nuvio::settings

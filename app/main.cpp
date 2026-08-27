@@ -161,6 +161,12 @@ int main(int argc, char* argv[])
                 + QStringLiteral("/torrserver"));
     auto p2pEngine = std::make_unique<nuvio::p2p::P2pEngine>(
         torrserverProcess.get());
+    // Cache-size setting reaches /settings on every fresh binary start,
+    // BEFORE any torrent is added (store-without-send was a real bug in
+    // the Compose line - never repeat it).
+    p2pEngine->setCacheSizeProvider([sp = settings.get()] {
+        return nuvio::p2p::toTorrServerCacheMb(sp->torrentCacheSize());
+    });
     auto playbackSession =
         std::make_unique<nuvio::playback::PlaybackSession>(
             streamResolver.get(), p2pEngine.get());
@@ -190,6 +196,9 @@ int main(int argc, char* argv[])
     engine.rootContext()->setContextProperty(
         QStringLiteral("playback"), QVariant::fromValue<QObject*>(
                                         playbackSession.get()));
+    engine.rootContext()->setContextProperty(
+        QStringLiteral("p2p"), QVariant::fromValue<QObject*>(
+                                   p2pEngine.get()));
     engine.rootContext()->setContextProperty(
         QStringLiteral("catalog"), QVariant::fromValue<QObject*>(
                                         catalog.get()));
