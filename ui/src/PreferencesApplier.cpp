@@ -28,6 +28,28 @@ QString PreferencesApplier::mappedHwdec() const
 void PreferencesApplier::applyAll()
 {
     applyDecoder();
+    applyCache();
+}
+
+/// Compose parity rule (AGENTS.md): forward buffer = user setting;
+/// back buffer is ADDITIONAL to it, so it must be a small fraction or the
+/// configured cache silently doubles.
+void PreferencesApplier::applyCache()
+{
+    auto* ctrl = qobject_cast<nuvio::mpv::MpvController*>(m_mpv);
+    if (!ctrl) return;
+
+    const qint64 forwardBytes =
+        qint64(m_settings->cacheMb()) * 1024 * 1024;
+    const qint64 kFloor  = qint64(8)  * 1024 * 1024;
+    const qint64 kCeil   = qint64(64) * 1024 * 1024;
+    qint64 backBytes     = forwardBytes / 4;
+    backBytes            = qBound(kFloor, backBytes, kCeil);
+
+    ctrl->setPropertyString(QStringLiteral("demuxer-max-bytes"),
+                            QString::number(forwardBytes));
+    ctrl->setPropertyString(QStringLiteral("demuxer-max-back-bytes"),
+                            QString::number(backBytes));
 }
 
 void PreferencesApplier::applyDecoder()

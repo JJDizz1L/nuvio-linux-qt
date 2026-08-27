@@ -37,6 +37,7 @@ public:
 
 private slots:
     void applyDecoder();
+    void applyCache();
 
 private:
     [[nodiscard]] QString mappedHwdec() const;
