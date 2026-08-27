@@ -14,6 +14,8 @@ PreferencesApplier::PreferencesApplier(
 {
     connect(&settings, &nuvio::settings::AppSettings::decoderModeChanged,
             this, &PreferencesApplier::applyDecoder);
+    connect(&settings, &nuvio::settings::AppSettings::subtitleStyleChanged,
+            this, &PreferencesApplier::applySubtitles);
 }
 
 QString PreferencesApplier::mappedHwdec() const
@@ -29,6 +31,19 @@ void PreferencesApplier::applyAll()
 {
     applyDecoder();
     applyCache();
+    applySubtitles();
+}
+
+/// Subtitle appearance -> mpv live properties (desktop parity: font size in
+/// the 6..40sp desktop range; text color as #RRGGBBAA).
+void PreferencesApplier::applySubtitles()
+{
+    auto* ctrl = qobject_cast<nuvio::mpv::MpvController*>(m_mpv);
+    if (!ctrl) return;
+    ctrl->setPropertyString(QStringLiteral("sub-font-size"),
+                            QString::number(m_settings->subtitleFontSize()));
+    ctrl->setPropertyString(QStringLiteral("sub-color"),
+                            m_settings->subtitleTextColor());
 }
 
 /// Compose parity rule (AGENTS.md): forward buffer = user setting;

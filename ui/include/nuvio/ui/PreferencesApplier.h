@@ -37,6 +37,7 @@ public:
 
 private slots:
     void applyDecoder();
+    void applySubtitles();
     void applyCache();
 
 private:

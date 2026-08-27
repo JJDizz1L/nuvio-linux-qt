@@ -38,6 +38,12 @@ class AppSettings final : public QObject {
     Q_PROPERTY(bool discordEnabled READ discordEnabled WRITE setDiscordEnabled
                    NOTIFY discordEnabledChanged)
 
+    // Subtitle appearance (Compose-parity keys; mpv-applied live).
+    Q_PROPERTY(int subtitleFontSize READ subtitleFontSize WRITE
+                   setSubtitleFontSize NOTIFY subtitleStyleChanged)
+    Q_PROPERTY(QString subtitleTextColor READ subtitleTextColor WRITE
+                   setSubtitleTextColor NOTIFY subtitleStyleChanged)
+
 public:
     explicit AppSettings(QObject* parent = nullptr);
 
@@ -65,6 +71,12 @@ public:
     [[nodiscard]] bool    discordEnabled() const;
     void                  setDiscordEnabled(bool v);
 
+    // Subtitle appearance (desktop range 6..40sp; Compose default 18).
+    [[nodiscard]] int     subtitleFontSize() const;
+    void                  setSubtitleFontSize(int v);
+    [[nodiscard]] QString subtitleTextColor() const;   // "#RRGGBBAA"
+    void                  setSubtitleTextColor(const QString& v);
+
     /// --- remote-profile-sync surface (leg 4) ---------------------------------
     /// Current player-settings feature payload (Compose blob v3 fragment).
     [[nodiscard]] QJsonObject exportPlayerSyncPayload();
@@ -76,6 +88,7 @@ public:
 
 signals:
     void darkThemeChanged();
+    void subtitleStyleChanged();
     void decoderModeChanged();
     void cacheMbChanged();
     void torrentCacheSizeChanged();

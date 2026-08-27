@@ -110,6 +110,62 @@ Item {
             }
         }
 
+        // ---- playback: subtitles ------------------------------------------------
+        Column {
+            width: parent.width
+            spacing: 4
+            Text {
+                text: qsTr("Subtitle size")
+                color: Theme.textPrimary
+                font.pixelSize: 15
+            }
+            Row {
+                width: parent.width
+                spacing: Theme.spacingSm
+                Slider {
+                    id: subSize
+                    width: parent.width - sizeLabel.width - parent.spacing
+                    from: 6; to: 40; stepSize: 1
+                    value: appsettings.subtitleFontSize
+                    onMoved: appsettings.subtitleFontSize = value
+                }
+                Label {
+                    id: sizeLabel
+                    text: appsettings.subtitleFontSize + " sp"
+                    color: Theme.textSecondary
+                }
+            }
+            Row {
+                width: parent.width
+                spacing: Theme.spacingSm
+                Text {
+                    width: parent.width * 0.4
+                    text: qsTr("Subtitle color")
+                    color: Theme.textPrimary
+                    font.pixelSize: 15
+                    anchors.verticalCenter: parent.verticalCenter
+                }
+                ComboBox {
+                    id: subColorBox
+                    width: parent.width * 0.6 - parent.spacing
+                    textRole: "label"
+                    model: [
+                        { label: qsTr("White"),  value: "#FFFFFFFF" },
+                        { label: qsTr("Yellow"), value: "#FFFFFF00" },
+                        { label: qsTr("Cyan"),   value: "#FF00FFFF" },
+                        { label: qsTr("Green"),  value: "#FF00FF00" }
+                    ]
+                    currentIndex: {
+                        const vals = ["#FFFFFFFF", "#FFFFFF00", "#FF00FFFF", "#FF00FF00"]
+                        return vals.indexOf(appsettings.subtitleTextColor)
+                    }
+                    onActivated: function(i) {
+                        appsettings.subtitleTextColor = model[i].value
+                    }
+                }
+            }
+        }
+
         // ---- playback: track languages ------------------------------------------
         Column {
             width: parent.width

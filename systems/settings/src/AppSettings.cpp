@@ -281,6 +281,38 @@ void AppSettings::setDiscordEnabled(bool v)
     emit discordEnabledChanged();
 }
 
+// ---- subtitle appearance (Compose-parity keys, mpv-applied) -----------------
+
+int AppSettings::subtitleFontSize() const
+{
+    const auto raw = m_store->player.getInt(
+        profileScoped("subtitle_font_size_sp"));
+    if (!raw) return 18;                                  // Compose default
+    return std::clamp(*raw, 6, 40);                       // desktop range
+}
+
+void AppSettings::setSubtitleFontSize(int v)
+{
+    v = std::clamp(v, 6, 40);
+    if (subtitleFontSize() == v) return;
+    m_store->player.putInt(profileScoped("subtitle_font_size_sp"), v);
+    emit subtitleStyleChanged();
+}
+
+QString AppSettings::subtitleTextColor() const
+{
+    return QString::fromStdString(m_store->player.getString(
+        profileScoped("subtitle_text_color")).value_or("#FFFFFFFF"));
+}
+
+void AppSettings::setSubtitleTextColor(const QString& v)
+{
+    if (subtitleTextColor() == v) return;
+    m_store->player.putString(profileScoped("subtitle_text_color"),
+                              v.toStdString());
+    emit subtitleStyleChanged();
+}
+
 // ---- remote-profile-sync surface --------------------------------------------
 
 QJsonObject AppSettings::exportPlayerSyncPayload()
