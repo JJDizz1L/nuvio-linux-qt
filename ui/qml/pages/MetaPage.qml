@@ -48,6 +48,18 @@ Item {
                              ep.name || "")
     }
 
+    // First YouTube trailer of the detail payload (Cinemeta trailers shape:
+    // [{source:"youtube", key:"..."}]), empty when none.
+    readonly property var youtubeTrailer: {
+        const list = cur.trailers || []
+        for (let i = 0; i < list.length; ++i)
+            if (list[i].provider === "youtube") return list[i]
+        return null
+    }
+    function playTrailer() {
+        if (youtubeTrailer) trailer.resolveForKey(youtubeTrailer.key)
+    }
+
     // ---- backdrop ------------------------------------------------------------
     Image {
         anchors.fill: parent
@@ -149,6 +161,12 @@ Item {
                 visible: !isSeries && imdbId.length > 0
                 text: qsTr("▶  Play")
                 onClicked: detail.playMovie()
+            }
+
+            Button {
+                visible: youtubeTrailer !== null
+                text: qsTr("▶  Trailer")
+                onClicked: detail.playTrailer()
             }
 
             ComboBox {

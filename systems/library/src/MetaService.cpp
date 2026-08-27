@@ -142,6 +142,24 @@ QVariantMap MetaService::metaFromJson(const QByteArray& body)
     out.insert(QStringLiteral("cast"),
                stringListOr(meta.value(QLatin1String("cast"))));
 
+    // Trailers: [{source:"youtube", key:"..."}] normalized; other
+    // providers pass through untouched so the UI can filter.
+    QVariantList trailers;
+    for (const auto& v :
+         meta.value(QLatin1String("trailers")).toArray()) {
+        const QJsonObject t = v.toObject();
+        QVariantMap e;
+        e.insert(QStringLiteral("provider"),
+                 t.value(QLatin1String("source")).toString());
+        e.insert(QStringLiteral("key"),
+                 t.contains(QLatin1String("key"))
+                     ? t.value(QLatin1String("key")).toString()
+                     : t.value(QLatin1String("id")).toString());
+        if (!e.value(QStringLiteral("key")).toString().isEmpty())
+            trailers.append(e);
+    }
+    out.insert(QStringLiteral("trailers"), trailers);
+
     QList<QVariantMap> videos;
     for (const auto& v :
          meta.value(QLatin1String("videos")).toArray()) {

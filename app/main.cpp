@@ -37,6 +37,7 @@
 #include "nuvio/ui/PreferencesApplier.h"
 #include "nuvio/settings/AppSettings.h"
 #include "nuvio/settings/PropertiesStore.h"
+#include "nuvio/trailer/TrailerResolver.h"
 #include "nuvio/ui/PosterProvider.h"
 #include "nuvio/ui/UiBootstrap.h"
 
@@ -288,6 +289,13 @@ int main(int argc, char* argv[])
         QStringLiteral("auth"), QVariant::fromValue<QObject*>(auth.get()));
     engine.addImageProvider(QStringLiteral("poster"),
                             new nuvio::ui::PosterProvider());  // engine takes ownership
+    // Trailer resolution (systems/trailer): MetaPage ▶ Trailer clicks land
+    // here; results open the player route via the shell's video page.
+    auto trailerResolver =
+        std::make_unique<nuvio::trailer::TrailerResolver>();
+    engine.rootContext()->setContextProperty(
+        QStringLiteral("trailer"), QVariant::fromValue<QObject*>(
+                                       trailerResolver.get()));
     engine.rootContext()->setContextProperty(
         QStringLiteral("mpvController"), QVariant::fromValue<QObject*>(
                                              controller.get()));

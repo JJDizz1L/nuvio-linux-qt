@@ -1,6 +1,7 @@
 # systems/trailer — YouTube trailer extraction kernel + innertube client.
 add_library(nuvio_trailer STATIC
-    include/nuvio/trailer/TrailerKernel.h src/TrailerKernel.cpp)
+    include/nuvio/trailer/TrailerKernel.h src/TrailerKernel.cpp
+    include/nuvio/trailer/TrailerResolver.h src/TrailerResolver.cpp)
 
 target_include_directories(nuvio_trailer PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_link_libraries(nuvio_trailer PUBLIC Qt6::Core Qt6::Network)

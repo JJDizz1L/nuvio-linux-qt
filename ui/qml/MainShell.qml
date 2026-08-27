@@ -105,6 +105,23 @@ ApplicationWindow {
         }
     }
 
+    // Trailer resolution: the extracted googlevideo url lands in the SAME
+    // player route as regular playback (single consumer surface). Failures
+    // reuse the shell toast.
+    Connections {
+        target: trailer
+        function onTrailerResolved(url, audioUrl) {
+            if (smokeActive) return
+            navigation.push("video")
+            pageItem.launchMedia(url)
+        }
+        function onTrailerFailed() {
+            toastText.text = qsTr("Trailer unavailable right now")
+            toast.opacity = 1
+            toastTimer.restart()
+        }
+    }
+
     // Playback-session wiring (plan §8 P1): a resolved card lands on the
     // player route; the harness keeps exclusive play rights in smoke mode.
     Connections {
