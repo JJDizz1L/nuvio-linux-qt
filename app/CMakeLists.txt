@@ -22,12 +22,12 @@ target_link_libraries(nuvio-linux-qt PRIVATE
 
 nuvio_common_target_props(nuvio-linux-qt)
 
-# Bundle the repo-LFS TorrServer (GOAMD64=v1) into the build tree so the
-# p2p resolver's build-tree candidates are live without env overrides.
-# Skips gracefully when the checkout has no smudged LFS copy (pointer
-# files fail the ELF-magic probe). CMake 3.16-safe: file(READ ... HEX),
-# no file(SIZE).
-set(NUVIO_TORRSERVER_SRC "${CMAKE_CURRENT_SOURCE_DIR}/../../composeApp/src/desktopMain/resources/torrserver/linux-amd64/TorrServer")
+# Bundle the vendored TorrServer (GOAMD64=v1, git-lfs) into the build tree
+# so the p2p resolver's build-tree candidates are live without env
+# overrides. Skips gracefully when the checkout has no smudged LFS copy
+# (pointer files fail the ELF-magic probe). CMake 3.16-safe:
+# file(READ ... HEX), no file(SIZE).
+set(NUVIO_TORRSERVER_SRC "${CMAKE_CURRENT_SOURCE_DIR}/../assets/torrserver/linux-amd64/TorrServer")
 set(NUVIO_TORRSERVER_BUNDLED "")
 if(EXISTS "${NUVIO_TORRSERVER_SRC}")
     file(READ "${NUVIO_TORRSERVER_SRC}" NUVIO_TORRSERVER_MAGIC LIMIT 4 HEX)

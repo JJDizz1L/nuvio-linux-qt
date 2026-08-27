@@ -1,6 +1,6 @@
 # Nuvio Linux — Qt Quick exploration line
 
-P0 structural spike per `../nuvio-linux-qt.md` (local doc). Compose app
+P0 structural spike per `nuvio-linux-qt.md` (in-repo design doc). Compose app
 remains the shipped product unless/until P0 gates pass.
 
 ## Requirements (portability charter)
