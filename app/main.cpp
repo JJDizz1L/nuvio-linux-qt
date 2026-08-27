@@ -66,6 +66,14 @@ int main(int argc, char* argv[])
     std::setlocale(LC_NUMERIC, "C");
     std::fprintf(stderr, "NUVIO-BOOT: entered main\n");   // unconditional truth
 
+    // Compose-parity typography: bundled JetBrains Sans as the application
+    // font, before any QML consumes the default font. One boot-truth line
+    // records the outcome (font stack defects are screenshot-visible).
+    const QString appFontFamily = nuvio::ui::loadBundledFonts();
+    std::fprintf(stderr, "NUVIO-BOOT: font=%s\n",
+                 appFontFamily.isEmpty() ? "<platform-default>"
+                                         : appFontFamily.toUtf8().constData());
+
     QGuiApplication::setApplicationName(QStringLiteral("nuvio-linux"));
     QGuiApplication::setApplicationVersion(QStringLiteral(NUVIO_VERSION_STRING));
     QGuiApplication::setOrganizationDomain(QStringLiteral("io.github.jdizz1l"));

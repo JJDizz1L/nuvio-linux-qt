@@ -23,7 +23,10 @@ qt_add_resources(nuvio_ui nuvio_qml
         qml/pages/SearchPage.qml
         qml/pages/MetaPage.qml
         qml/pages/SettingsPage.qml
-        qml/components/TransportBar.qml)
+        qml/components/TransportBar.qml
+        assets/fonts/jetbrains_sans_regular.ttf
+        assets/fonts/jetbrains_sans_semibold.ttf
+        assets/fonts/jetbrains_sans_bold.ttf)
 
 # The UI compiles against the mpv system's public headers and links it — the
 # ONLY sanctioned systems dependency from this layer (plus future viewmodels).
