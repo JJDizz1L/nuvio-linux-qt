@@ -5,11 +5,14 @@
 // Addons are user-configured in the Compose line; this resolver accepts an
 // ordered addon list, derives per-addon stream endpoints from manifest URLs
 //   {manifestBase}/stream/{type}/{imdbId}.json
-// and applies a STRICT SELECTION POLICY while p2p engines do not exist:
-//   1. direct http(s) sources (externalUrl/url) - first match wins
-//   2. infoHash-only torrent entries are counted and SKIPPED (they need the
-//      P2P engine - plan §8; wiring them before that exists is how phantom
-//      playable states happen)
+// and applies a SELECTION POLICY across two tiers:
+//   1. direct http(s) sources (externalUrl/url) - bestFor() picks the first
+//      match in addon order
+//   2. infoHash-only torrent entries - KEPT since the P2P engine exists
+//      (systems/p2p): bestTorrent() exposes the first of them in addon
+//      order so callers can route through TorrServer. bestFor() itself
+//      still reports empty when no direct source exists - a torrent entry
+//      alone never claims to be directly playable.
 //
 // Network-optional by design: networkPath funnels through public
 // applyAddonStreams(addonId, body) exactly like CatalogService.ingest - so
@@ -73,6 +76,13 @@ public:
     /// every configured addon answered for the key.
     Q_INVOKABLE QVariantMap bestFor(const QString& type,
                                     const QString& imdbId) const;
+
+    /// First torrent (infoHash) entry in addon order among cached results,
+    /// as {source,title,infoHash}; EMPTY map when none stored or when every
+    /// configured addon answered without one. Pair with the P2P engine -
+    /// see the two-tier policy note above.
+    Q_INVOKABLE QVariantMap bestTorrent(const QString& type,
+                                        const QString& imdbId) const;
 
 signals:
     /// Emitted whenever any addon body lands for the key; consumers may

@@ -2,11 +2,17 @@
 // StreamResolver through its PUBLIC offline ingest path - no network.
 #include <nuvio/playback/PlaybackSession.h>
 #include <nuvio/playback/StreamResolver.h>
+#include <nuvio/p2p/P2pEngine.h>
+#include <nuvio/p2p/TorrServerProcess.h>
 
 #include <QCoreApplication>
+#include <QDeadlineTimer>
+#include <QEventLoop>
 #include <cstdio>
 
 using nuvio::playback::PlaybackSession;
+using nuvio::p2p::P2pEngine;
+using nuvio::p2p::TorrServerProcess;
 using nuvio::playback::StreamResolver;
 static int failures = 0;
 #define CHECK(cond, msg)                            \
@@ -131,6 +137,33 @@ int main(int argc, char** argv)
         CHECK(cap.ready == readyB4 + 1 &&
                   cap.lastReadyUrl == "https://cdn.example/new.mkv",
               "current key still honored (distinct payload proves it)");
+    }
+
+    { // tier 2: torrent-only + engine attachment -> routed, not instant-toast
+        qunsetenv("NUVIO_TORRSERVER_BINARY");  // force binary resolution miss
+        TorrServerProcess proc("/tmp/nuvio-playback-tests/torrserver");
+        P2pEngine engine(&proc);
+        PlaybackSession p2session(&r, &engine);
+        Capture cap3;
+        cap3.attach(p2session);
+
+        r.applyAddonStreams("movie/tt600", "alpha", bodyTorrent);
+        r.applyAddonStreams("movie/tt600", "beta", bodyTorrent); // completes
+        const int readyB4 = cap3.ready;
+        const int unavB4  = cap3.unavail;
+
+        p2session.requestPlay("movie", "tt600", "Via Engine");
+        CHECK(cap3.ready == readyB4 && cap3.unavail == unavB4,
+              "torrent-only with engine pending stays silent (not toast)");
+
+        // Engine cannot spawn a real server in the offline suite; its
+        // queued failure relays through the session as unavailable.
+        const QDeadlineTimer drain(5000);
+        while (!drain.hasExpired() && cap3.unavail == unavB4)
+            QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
+        CHECK(cap3.unavail == unavB4 + 1,
+              "engine failure relays as honest unavailable");
+        CHECK(!p2session.hasSession(), "no session from failed engine");
     }
 
     { // zero addons configured: trivially complete -> immediate toast path

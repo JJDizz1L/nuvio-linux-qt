@@ -17,10 +17,17 @@
 //   * in-flight: matched on the resolver's resolutionComplete, with a
 //     pending-key guard dropping late completions for superseded clicks.
 //
+// Direct sources launch immediately. When only a TORRENT entry exists and
+// a P2pEngine is attached, the session hands the info-hash to the engine
+// and relays its queued streamReady/streamFailed back onto this object's
+// own terminal signals - callers need no P2P awareness at all.
+//
 // Offline-testable by construction: no QML, no GUI, no network here.
 
 #include <QObject>
 #include <QString>
+
+namespace nuvio::p2p { class P2pEngine; }
 
 namespace nuvio::playback {
 
@@ -35,6 +42,10 @@ class PlaybackSession final : public QObject {
 public:
     explicit PlaybackSession(StreamResolver* resolver,
                              QObject* parent = nullptr);
+    /// With an engine attached, torrent-only resolutions route through it
+    /// instead of surfacing playbackUnavailable right away.
+    PlaybackSession(StreamResolver* resolver, nuvio::p2p::P2pEngine* p2p,
+                    QObject* parent = nullptr);
 
     /// User intent: play this item. Supersedes any earlier pending request.
     Q_INVOKABLE void requestPlay(const QString& type, const QString& imdbId,
@@ -53,10 +64,14 @@ signals:
 
 private:
     /// Evaluate the CURRENTLY pending key against cached resolver results
-    /// and emit exactly one terminal signal.
+    /// and emit exactly one terminal signal (possibly deferred through the
+    /// P2P engine).
     void decide();
 
     StreamResolver* m_resolver = nullptr;
+    nuvio::p2p::P2pEngine* m_p2p = nullptr;
+    quint64 m_activeToken = 0;
+    bool    m_awaitingP2p = false;
 
     // Latest user intent (pending-key guard for stale completions).
     QString m_pendingType;

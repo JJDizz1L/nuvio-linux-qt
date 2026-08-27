@@ -76,6 +76,36 @@ int main(int argc, char** argv)
               "torrent-only stays unplayable (no phantom states)");
     }
 
+    { // bestTorrent exposes p2p-routable entries; direct still wins tier 1
+        r.setAddons(QVariantList{
+            QVariantMap{{"id", "torrentio"}, {"name", "Torrentio"},
+                        {"url", "https://torrentio.strem.fun/manifest.json"}},
+            QVariantMap{{"id", "direct"}, {"name", "DirectAdd"},
+                        {"url",
+                         "https://example.com/strem/manifest.json"}},
+        });
+        // key tt0111161 was ingested above with a torrent entry (torrentio)
+        // AND a direct entry (direct): tier 1 unaffected...
+        const auto best = r.bestFor("movie", "tt0111161");
+        CHECK(best.value("source").toString() == "torrentio",
+              "tier 1 unchanged by torrent retention");
+        const auto tor = r.bestTorrent("movie", "tt0111161");
+        CHECK(tor.value("infoHash").toString() == "d5a4b0e7a1c93f88",
+              "bestTorrent returns first infoHash in addon order");
+        // all-torrent case: no direct anywhere, but routable (fresh key so
+        // the reconfigured addon set answers it completely)
+        const QByteArray onlyTorrents =
+            R"({"streams":[{"title":"t","infoHash":"abcd"}]})";
+        r.applyAddonStreams("movie/tt8888888", "torrentio", onlyTorrents);
+        r.applyAddonStreams("movie/tt8888888", "direct", emptyBody);
+        const auto tor2 = r.bestTorrent("movie", "tt8888888");
+        CHECK(tor2.value("infoHash").toString() == "abcd",
+              "all-torrent case exposes hash instead of nothing");
+        // series/tt0903747 ingested earlier had NO torrent entries
+        CHECK(r.bestTorrent("series", "tt0903747").isEmpty(),
+              "no torrents stored -> empty map");
+    }
+
     { // isComplete mirrors per-key completeness only
         StreamResolver solo;
         solo.setAddons(QVariantList{QVariantMap{

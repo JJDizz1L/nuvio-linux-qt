@@ -22,6 +22,9 @@
 #include "nuvio/library/CatalogService.h"
 #include "nuvio/playback/PlaybackSession.h"
 #include "nuvio/playback/StreamResolver.h"
+#include "nuvio/p2p/P2pEngine.h"
+#include "nuvio/p2p/TorrServerProcess.h"
+#include "nuvio/platform/XdgPaths.h"
 #include "nuvio/ui/NavigationModel.h"
 #include "nuvio/ui/PreferencesApplier.h"
 #include "nuvio/settings/AppSettings.h"
@@ -147,10 +150,20 @@ int main(int argc, char* argv[])
 
     // Session wiring: library card intent -> resolver outcome -> player
     // route. Owns pending-intent state so stale completions never launch
-    // the wrong title (see PlaybackSession.h).
+    // the wrong title (see PlaybackSession.h). Torrent-only resolutions
+    // route through the local TorrServer engine; its binary is resolved
+    // from NUVIO_TORRSERVER_BINARY / dev-tree / vendor paths at start
+    // time - absence surfaces as an honest failure (toast), never a
+    // phantom playable.
+    auto torrserverProcess =
+        std::make_unique<nuvio::p2p::TorrServerProcess>(
+            nuvio::platform::appCacheDir()
+                + QStringLiteral("/torrserver"));
+    auto p2pEngine = std::make_unique<nuvio::p2p::P2pEngine>(
+        torrserverProcess.get());
     auto playbackSession =
         std::make_unique<nuvio::playback::PlaybackSession>(
-            streamResolver.get());
+            streamResolver.get(), p2pEngine.get());
 
     QQmlApplicationEngine engine;
     QObject::connect(&engine, &QQmlEngine::quit,
