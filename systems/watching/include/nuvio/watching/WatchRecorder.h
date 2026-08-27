@@ -13,7 +13,9 @@
 #include <QObject>
 #include <QString>
 #include <QVariantList>
+#include <QVariantMap>
 
+#include "nuvio/watching/ContinueWatchingPrefs.h"
 #include "nuvio/watching/WatchProgress.h"
 
 namespace nuvio::watching {
@@ -24,6 +26,13 @@ class WatchRecorder : public QObject {
     Q_OBJECT
     Q_PROPERTY(QVariantList continueWatching READ continueWatching
                NOTIFY continueWatchingChanged)
+    /// Compose ContinueWatchingPreferences parity (continue_watching_preferences
+    /// store). Map keys: visible, style ("Card"/"Wide"/"Poster"), sortMode
+    /// ("DEFAULT"/"STREAMING_STYLE"/"SPLIT_UPCOMING"), episodeThumbnails,
+    /// blurNextUp, unairedNextUp, resumePrompt, upNextFurthest.
+    /// Style/next-up-specific knobs currently have no Qt rendering surface
+    /// (no next-up candidate subsystem) — they persist for cross-line parity.
+    Q_PROPERTY(QVariantMap cwPrefs READ cwPrefs NOTIFY cwPrefsChanged)
     Q_PROPERTY(bool hasResume READ hasResume NOTIFY resumeChanged)
     Q_PROPERTY(QString resumeTitle READ resumeTitle NOTIFY resumeChanged)
     Q_PROPERTY(qint64 resumePositionMs READ resumePositionMs NOTIFY resumeChanged)
@@ -75,9 +84,21 @@ public:
     Q_INVOKABLE bool isWatched(const QString& type, const QString& id,
                                int season = -1, int episode = -1) const;
 
+    // ---- ContinueWatching preferences (Compose settings-page parity) ----
+    Q_INVOKABLE QVariantMap cwPrefs() const;
+    Q_INVOKABLE void setCwVisible(bool visible);
+    Q_INVOKABLE void setCwStyle(const QString& styleName);
+    Q_INVOKABLE void setCwSortMode(const QString& sortModeName);
+    Q_INVOKABLE void setCwEpisodeThumbnails(bool on);
+    Q_INVOKABLE void setCwBlurNextUp(bool on);
+    Q_INVOKABLE void setCwUnairedNextUp(bool on);
+    Q_INVOKABLE void setCwResumePrompt(bool on);
+    Q_INVOKABLE void setCwUpNextFurthest(bool on);
+
 signals:
     void continueWatchingChanged();
     void resumeChanged();
+    void cwPrefsChanged();
     /// Emitted whenever the local watched set gained/lost a row (drives the
     /// watched-items sync leg).
     void watchedChanged();
@@ -86,6 +107,8 @@ private:
     void rebuildModel();
 
     WatchingStore* m_store;
+    ContinueWatchingPrefsStore m_cwPrefsStore{kDefaultProfileId};
+    ContinueWatchingPrefs m_cwPrefs{};
     bool m_hasSession = false;
     WatchEntry m_session{};     // current session identity + last position
     long long m_lastPersistedPositionMs = -1;

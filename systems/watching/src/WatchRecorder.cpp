@@ -7,8 +7,11 @@
 namespace nuvio::watching {
 
 WatchRecorder::WatchRecorder(WatchingStore* store, QObject* parent)
-    : QObject(parent), m_store(store)
-{}
+    : QObject(parent), m_store(store),
+      m_cwPrefsStore{kDefaultProfileId}
+{
+    m_cwPrefs = m_cwPrefsStore.load();
+}
 
 void WatchRecorder::beginSession(const QString& contentType,
                                  const QString& parentMetaId,
@@ -198,6 +201,113 @@ bool WatchRecorder::isWatched(const QString& type, const QString& id,
     return m_store->isWatched(type.toStdString(), id.toStdString(),
                               season >= 0 ? std::optional<int>(season) : std::nullopt,
                               episode >= 0 ? std::optional<int>(episode) : std::nullopt);
+}
+
+
+// ---- ContinueWatching preferences (Compose settings-page parity) ----------
+
+QVariantMap WatchRecorder::cwPrefs() const
+{
+    const auto styleName = [](CwStyle v) {
+        switch (v) {
+        case CwStyle::Wide:   return QStringLiteral("Wide");
+        case CwStyle::Poster: return QStringLiteral("Poster");
+        case CwStyle::Card:   return QStringLiteral("Card");
+        }
+        return QStringLiteral("Card");
+    };
+    const auto sortName = [](CwSortMode v) {
+        switch (v) {
+        case CwSortMode::StreamingStyle: return QStringLiteral("STREAMING_STYLE");
+        case CwSortMode::SplitUpcoming:  return QStringLiteral("SPLIT_UPCOMING");
+        case CwSortMode::Default:        return QStringLiteral("DEFAULT");
+        }
+        return QStringLiteral("DEFAULT");
+    };
+    return QVariantMap{
+        {QStringLiteral("visible"), m_cwPrefs.isVisible},
+        {QStringLiteral("style"), styleName(m_cwPrefs.style)},
+        {QStringLiteral("sortMode"), sortName(m_cwPrefs.sortMode)},
+        {QStringLiteral("episodeThumbnails"), m_cwPrefs.useEpisodeThumbnails},
+        {QStringLiteral("blurNextUp"), m_cwPrefs.blurNextUp},
+        {QStringLiteral("unairedNextUp"), m_cwPrefs.showUnairedNextUp},
+        {QStringLiteral("resumePrompt"), m_cwPrefs.showResumePromptOnLaunch},
+        {QStringLiteral("upNextFurthest"), m_cwPrefs.upNextFromFurthestEpisode},
+    };
+}
+
+void WatchRecorder::setCwVisible(const bool visible)
+{
+    if (m_cwPrefs.isVisible == visible) return;
+    m_cwPrefs.isVisible = visible;
+    m_cwPrefsStore.save(m_cwPrefs);
+    emit cwPrefsChanged();
+}
+
+void WatchRecorder::setCwStyle(const QString& styleName)
+{
+    CwStyle v = CwStyle::Card;
+    if (styleName == QLatin1String("Wide")) v = CwStyle::Wide;
+    else if (styleName == QLatin1String("Poster")) v = CwStyle::Poster;
+    else if (styleName != QLatin1String("Card")) return;
+    if (m_cwPrefs.style == v) return;
+    m_cwPrefs.style = v;
+    m_cwPrefsStore.save(m_cwPrefs);
+    emit cwPrefsChanged();
+}
+
+void WatchRecorder::setCwSortMode(const QString& sortModeName)
+{
+    CwSortMode v = CwSortMode::Default;
+    if (sortModeName == QLatin1String("STREAMING_STYLE"))
+        v = CwSortMode::StreamingStyle;
+    else if (sortModeName == QLatin1String("SPLIT_UPCOMING"))
+        v = CwSortMode::SplitUpcoming;
+    else if (sortModeName != QLatin1String("DEFAULT")) return;
+    if (m_cwPrefs.sortMode == v) return;
+    m_cwPrefs.sortMode = v;
+    m_cwPrefsStore.save(m_cwPrefs);
+    emit cwPrefsChanged();
+}
+
+void WatchRecorder::setCwEpisodeThumbnails(const bool on)
+{
+    if (m_cwPrefs.useEpisodeThumbnails == on) return;
+    m_cwPrefs.useEpisodeThumbnails = on;
+    m_cwPrefsStore.save(m_cwPrefs);
+    emit cwPrefsChanged();
+}
+
+void WatchRecorder::setCwBlurNextUp(const bool on)
+{
+    if (m_cwPrefs.blurNextUp == on) return;
+    m_cwPrefs.blurNextUp = on;
+    m_cwPrefsStore.save(m_cwPrefs);
+    emit cwPrefsChanged();
+}
+
+void WatchRecorder::setCwUnairedNextUp(const bool on)
+{
+    if (m_cwPrefs.showUnairedNextUp == on) return;
+    m_cwPrefs.showUnairedNextUp = on;
+    m_cwPrefsStore.save(m_cwPrefs);
+    emit cwPrefsChanged();
+}
+
+void WatchRecorder::setCwResumePrompt(const bool on)
+{
+    if (m_cwPrefs.showResumePromptOnLaunch == on) return;
+    m_cwPrefs.showResumePromptOnLaunch = on;
+    m_cwPrefsStore.save(m_cwPrefs);
+    emit cwPrefsChanged();
+}
+
+void WatchRecorder::setCwUpNextFurthest(const bool on)
+{
+    if (m_cwPrefs.upNextFromFurthestEpisode == on) return;
+    m_cwPrefs.upNextFromFurthestEpisode = on;
+    m_cwPrefsStore.save(m_cwPrefs);
+    emit cwPrefsChanged();
 }
 
 } // namespace nuvio::watching

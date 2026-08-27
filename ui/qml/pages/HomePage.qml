@@ -14,7 +14,8 @@ Item {
         anchors.right: parent.right
         anchors.margins: Theme.spacingLg
         spacing: Theme.spacingMd
-        visible: watching.continueWatching.length > 0
+        visible: watching.cwPrefs.visible !== false
+                 && watching.continueWatching.length > 0
 
         Text {
             text: qsTr("Continue Watching")
