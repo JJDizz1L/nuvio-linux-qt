@@ -100,7 +100,10 @@ int main(int argc, char** argv)
 {
     QCoreApplication app(argc, argv);
 
-    if (!qEnvironmentVariableIsSet("NUVIO_SYNC_CONTRACT")) {
+    // Gate: unset OR empty both mean "skip" (ctest ENVIRONMENT props can
+    // pass empty strings through, and empty must never count as opt-in).
+    if (!qEnvironmentVariableIsSet("NUVIO_SYNC_CONTRACT") ||
+        qEnvironmentVariableIsEmpty("NUVIO_SYNC_CONTRACT")) {
         std::printf(
             "SYNC-CONTRACT SKIPPED (set NUVIO_SYNC_CONTRACT=1 to run)\n");
         return 0;
