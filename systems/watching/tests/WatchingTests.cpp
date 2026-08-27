@@ -217,6 +217,48 @@ int main(int argc, char** argv)
         CHECK(rec.isWatched("series", "tt9", 1, 1),
               "completed session marks watched");
     }
+    { // continueWatching rows carry artwork fields (wide-card artwork strip)
+        QTemporaryDir sd;
+        CHECK(sd.isValid(), "artwork temp dir");
+        const QString p = QDir(sd.path()).filePath("watch_progress.properties");
+        const QString w = QDir(sd.path()).filePath("watched.properties");
+        WatchingStore store(p, w, 1);
+        WatchRecorder rec(&store, &app);
+
+        WatchEntry ep;
+        ep.contentType = "series"; ep.parentMetaId = "tt5";
+        ep.parentMetaType = "series"; ep.videoId = "tt5:1:2";
+        ep.title = "Show"; ep.season = 1; ep.episode = 2;
+        ep.episodeThumbnail = "https://img/ep.jpg";
+        ep.background = "https://img/bg.jpg";
+        ep.lastPositionMs = 60'000; ep.durationMs = 1'800'000;
+        ep.lastUpdatedEpochMs = nowMs(); ep.source = "local";
+        store.upsert(ep);
+
+        WatchEntry mv = ep;
+        mv.contentType = "movie"; mv.parentMetaId = "tt6";
+        mv.parentMetaType = "movie"; mv.videoId = "tt6";
+        mv.season = std::nullopt; mv.episode = std::nullopt;
+        mv.episodeThumbnail = std::nullopt;
+        mv.poster = "https://img/poster.jpg";
+        store.upsert(mv);
+
+        const auto cw = rec.continueWatching();
+        CHECK(cw.size() == 2, "two resumable rows surfaced");
+        for (const auto& item : cw) {
+            const auto m = item.toMap();
+            if (m.value("id") == QLatin1String("tt5")) {
+                CHECK(m.value("artwork") == QLatin1String("https://img/ep.jpg"),
+                      "episode artwork prefers episodeThumbnail");
+                CHECK(m.value("background") == QLatin1String("https://img/bg.jpg"),
+                      "background exposed for fallback tier");
+            }
+            if (m.value("id") == QLatin1String("tt6")) {
+                CHECK(m.value("artwork") == QLatin1String("https://img/poster.jpg"),
+                      "movie artwork prefers poster");
+            }
+        }
+    }
     { // resumePositionMsFor: identity-scoped, resumable-only
         QTemporaryDir sd;
         CHECK(sd.isValid(), "resume lookup temp dir");

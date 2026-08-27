@@ -156,12 +156,38 @@ qint64 WatchRecorder::resumePositionMsFor(const QString& parentMetaId,
 
 QVariantList WatchRecorder::continueWatching() const
 {
+    const auto str = [](const std::optional<std::string>& v) {
+        return v.has_value() ? QString::fromStdString(*v) : QString();
+    };
+    // Wide-card artwork strip source — Compose's
+    // continueWatchingArtworkUrl (HomeContinueWatchingSection.kt):
+    // episode thumbnails win for episodes when the pref is on, poster
+    // otherwise; background then thumbnail as fallback tiers. (No
+    // next-up subsystem in Qt, so the isNextUp branch doesn't apply.)
+    const bool useEpisodeThumbs = m_cwPrefs.useEpisodeThumbnails;
+    const auto artworkFor = [useEpisodeThumbs](const WatchEntry& e) {
+        if (e.isEpisode() && useEpisodeThumbs
+            && e.episodeThumbnail && !e.episodeThumbnail->empty())
+            return QString::fromStdString(*e.episodeThumbnail);
+        if (e.poster && !e.poster->empty())
+            return QString::fromStdString(*e.poster);
+        if (e.background && !e.background->empty())
+            return QString::fromStdString(*e.background);
+        if (e.episodeThumbnail && !e.episodeThumbnail->empty())
+            return QString::fromStdString(*e.episodeThumbnail);
+        return QString();
+    };
+
     QVariantList out;
     for (const auto& e : m_store->loadEntries()) {
         if (!e.isResumable()) continue;
         QVariantMap m;
         m.insert("title", QString::fromStdString(e.title));
         m.insert("poster", e.poster ? QString::fromStdString(*e.poster) : QString());
+        m.insert("background", str(e.background));
+        m.insert("episodeThumbnail", str(e.episodeThumbnail));
+        m.insert("episodeTitle", str(e.episodeTitle));
+        m.insert("artwork", artworkFor(e));
         m.insert("type", QString::fromStdString(e.contentType));
         m.insert("id", QString::fromStdString(e.parentMetaId));
         m.insert("season", e.season.value_or(-1));

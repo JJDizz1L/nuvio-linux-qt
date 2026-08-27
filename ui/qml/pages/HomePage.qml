@@ -34,14 +34,29 @@ Item {
 
             delegate: Item {
                 required property var modelData
-                width: 150
-                height: 190
+                // Compose ContinueWatchingWideCard (>=1440dp tier):
+                // 400x160 card, 100px artwork strip, 16px content padding,
+                // radius 18, title 20 bold, meta 16, progress 6 + label 14.
+                width: 400
+                height: 160
 
                 Rectangle {
                     anchors.fill: parent
-                    radius: Theme.radiusMd
-                    color: cwArea.containsMouse
-                           ? Theme.surfaceHigh : Theme.surface
+                    radius: 18
+                    color: Theme.surface
+                    border.width: 1
+                    border.color: "#26ffffff"   // Compose: white 15%
+                }
+                Image {
+                    anchors.left: parent.left
+                    anchors.top: parent.top
+                    anchors.bottom: parent.bottom
+                    width: 100
+                    visible: modelData.artwork !== ""
+                    source: visible ? "image://poster/" + modelData.artwork : ""
+                    fillMode: Image.PreserveAspectCrop
+                    asynchronous: true
+                    sourceSize.height: 320
                 }
                 MouseArea {
                     id: cwArea
@@ -56,45 +71,92 @@ Item {
                         playback.requestPlay(m.type, key, m.title)
                     }
                 }
-                Text {
+                Item {
                     anchors.top: parent.top
-                    anchors.left: parent.left
-                    anchors.margins: 10
-                    width: parent.width - 20
-                    text: modelData.title
-                    color: Theme.textPrimary
-                    font.pixelSize: 13
-                    font.weight: Font.DemiBold
-                    elide: Text.ElideRight
-                }
-                Text {
-                    anchors.bottom: cwBar.top
-                    anchors.left: parent.left
-                    anchors.margins: 10
-                    text: modelData.season >= 0
-                          ? qsTr("S%1 E%2").arg(modelData.season)
-                                             .arg(modelData.episode)
-                          : ""
-                    color: Theme.textSecondary
-                    font.pixelSize: 11
-                }
-                // resume progress bar (fraction of duration watched)
-                Rectangle {
-                    id: cwBar
                     anchors.bottom: parent.bottom
                     anchors.left: parent.left
-                    anchors.margins: 10
-                    width: parent.width - 20
-                    height: 4
-                    radius: 2
-                    color: Theme.surface
-                    Rectangle {
+                    anchors.leftMargin: 100
+                    anchors.right: parent.right
+
+                    Text {
+                        id: cwTitle
                         anchors.top: parent.top
-                        anchors.bottom: parent.bottom
+                        anchors.topMargin: 16
                         anchors.left: parent.left
-                        width: Math.max(4, parent.width * modelData.fraction)
-                        radius: 2
-                        color: Theme.accent
+                        anchors.leftMargin: 16
+                        anchors.right: parent.right
+                        anchors.rightMargin: 16
+                        text: modelData.title
+                        color: Theme.textPrimary
+                        font.pixelSize: 20
+                        font.weight: Font.Bold
+                        elide: Text.ElideRight
+                    }
+                    Text {
+                        id: cwMeta
+                        anchors.top: cwTitle.bottom
+                        anchors.topMargin: 6
+                        anchors.left: parent.left
+                        anchors.leftMargin: 16
+                        anchors.right: parent.right
+                        anchors.rightMargin: 16
+                        text: modelData.season >= 0
+                              ? qsTr("S%1 E%2").arg(modelData.season)
+                                                 .arg(modelData.episode)
+                              : qsTr("Movie")
+                        color: Theme.textSecondary
+                        font.pixelSize: 16
+                        elide: Text.ElideRight
+                    }
+                    Text {
+                        id: cwEpisodeTitle
+                        anchors.top: cwMeta.bottom
+                        anchors.topMargin: 6
+                        anchors.left: parent.left
+                        anchors.leftMargin: 16
+                        anchors.right: parent.right
+                        anchors.rightMargin: 16
+                        visible: modelData.episodeTitle !== ""
+                        text: modelData.episodeTitle
+                        color: Theme.textSecondary
+                        font.pixelSize: 16
+                        elide: Text.ElideRight
+                    }
+                    Text {
+                        id: cwPct
+                        anchors.bottom: parent.bottom
+                        anchors.bottomMargin: 16
+                        anchors.left: parent.left
+                        anchors.leftMargin: 16
+                        visible: modelData.fraction > 0
+                        // Compose: roundToInt().coerceIn(1, 99) + "% watched"
+                        text: qsTr("%1 watched").arg(
+                                  Math.max(1, Math.min(99,
+                                      Math.round(modelData.fraction * 100)))
+                                  + "%")
+                        color: Theme.textSecondary
+                        font.pixelSize: 14
+                    }
+                    Rectangle {
+                        anchors.bottom: cwPct.top
+                        anchors.bottomMargin: 8
+                        anchors.left: parent.left
+                        anchors.leftMargin: 16
+                        anchors.right: parent.right
+                        anchors.rightMargin: 16
+                        height: 6
+                        radius: 3
+                        visible: modelData.fraction > 0
+                        color: "#1affffff"   // Compose: white 10% track
+                        Rectangle {
+                            anchors.left: parent.left
+                            anchors.top: parent.top
+                            anchors.bottom: parent.bottom
+                            width: Math.max(6, parent.width *
+                                Math.min(1, Math.max(0, modelData.fraction)))
+                            radius: 3
+                            color: Theme.accent
+                        }
                     }
                 }
             }
