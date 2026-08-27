@@ -130,6 +130,8 @@ int main(int argc, char* argv[])
         QVariantList list;
         for (const auto& a : registryPtr->addons()) {
             const auto m      = a.toMap();
+            // Compose parity: disabled addons contribute no streams.
+            if (m.value(QStringLiteral("enabled"), true) == false) continue;
             const QString url = m.value("url").toString();
             if (url.isEmpty()) continue;
             list.append(QVariantMap{

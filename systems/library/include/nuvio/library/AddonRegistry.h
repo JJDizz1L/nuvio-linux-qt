@@ -1,22 +1,30 @@
 #pragma once
 
-// User-configured Stremio addons (manifest URLs -> identity+name+types).
+// User-configured Stremio addons - P4 blob-parity storage.
 //
-// STORAGE DIVERGENCE - deliberate and documented (plan §4 L1):
-// The Compose line persists addon installs inside its Supabase sync blob
-// schema (P4/authsync contract zone). Until that contract is ported, THIS
-// line owns an isolated file (qt-addons.properties) so no invented key can
-// ever collide with upstream profile data. Migration = P4 work item.
+// TRUTH lives in the Compose `addons.properties` store (AddonStore docs):
+// installed_addon_urls_1 + addon_enabled_states_1, so both builds see one
+// install set. Manifest BODIES are an optimization cache (qt-addons,
+// sha256(url) keys); missing bodies are refetched asynchronously and rows
+// appear as URL placeholders until arrival (never blocking the QML thread).
 //
-// File layout: keys "addon_<n>" ascending, value = JSON object
-//   {"url":..., "id":..., "name":..., "types":[...]}
-// Removal compacts indices (stable, atomic tmp-rename persistence).
+// Rows expose {url, id, name, types[], enabled}; id is "" while the manifest
+// is still being fetched. remove() keys on id (the registry's UI contract).
 
 #include <QObject>
 #include <QString>
 #include <QVariantList>
 
+#include <memory>
+
+#include "nuvio/library/AddonStore.h"
+
 class QNetworkAccessManager;
+class QNetworkReply;
+
+namespace nuvio::settings {
+class PropertiesStore;
+}
 
 namespace nuvio::library {
 
@@ -26,14 +34,19 @@ class AddonRegistry final : public QObject {
 
 public:
     explicit AddonRegistry(QObject* parent = nullptr);
+    /// Defined out-of-line: unique_ptr members over a fwd-declared store.
+    ~AddonRegistry() override;
 
-    /// Reads qt-addons.properties (if present) at construction-time call.
+    /// Reconciles Compose truth URLs with cached manifests at construction-
+    /// time call; refetches anything uncached async (changed() per arrival).
     Q_INVOKABLE void load();
 
-    /// Fetches <url> (adds .json if missing suffix), validates the manifest,
-    /// dedupes by id/url, persists. Emits addResult(ok, message).
+    /// Normalizes like Compose, dedupes, fetches + validates the manifest,
+    /// then persists truth+enabled(true)+cache. Emits addResult(ok, message).
     Q_INVOKABLE void add(const QString& manifestUrl);
     Q_INVOKABLE void remove(const QString& id);
+    /// Enabled-state toggle persisted to the shared truth store.
+    Q_INVOKABLE void setEnabled(int index, bool on);
 
     [[nodiscard]] QVariantList addons() const { return m_addons; }
 
@@ -47,10 +60,15 @@ signals:
     void removed(QString id);
 
 private:
-    void persist();
-    void finishAdd(const QString& normalizedUrl, const QByteArray& body);
+    void fetchManifest(const QString& url);   // async; updates row + cache
+    void persistTruth();
+    void rebuildRow(const QString& url, const QByteArray& body);
 
     QVariantList m_addons;
+    // Single long-lived store instances: PropertiesStore snapshots at
+    // construction, so per-call instances would clobber each other's writes.
+    std::unique_ptr<nuvio::settings::PropertiesStore> m_truth;
+    std::unique_ptr<nuvio::settings::PropertiesStore> m_cache;
     class  QNetworkAccessManager* m_nam = nullptr;
 };
 

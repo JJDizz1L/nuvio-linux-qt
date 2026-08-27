@@ -3,6 +3,7 @@
 add_library(nuvio_library STATIC
     include/nuvio/library/CatalogService.h src/CatalogService.cpp
     include/nuvio/library/MetaService.h    src/MetaService.cpp
+    include/nuvio/library/AddonStore.h     src/AddonStore.cpp
     include/nuvio/library/AddonRegistry.h  src/AddonRegistry.cpp
     src/LibrarySystem.cpp)
 

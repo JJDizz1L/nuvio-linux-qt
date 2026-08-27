@@ -8,15 +8,23 @@
 #include <QNetworkRequest>
 #include <QUrl>
 
+#include <memory>
+
 #include <nuvio/settings/PropertiesStore.h>
 
 namespace nuvio::library {
 
 AddonRegistry::AddonRegistry(QObject* parent)
     : QObject(parent),
+      m_truth(std::make_unique<nuvio::settings::PropertiesStore>(
+          nuvio::settings::PropertiesStore::defaultPath("addons"))),
+      m_cache(std::make_unique<nuvio::settings::PropertiesStore>(
+          nuvio::settings::PropertiesStore::defaultPath("qt-addons"))),
       m_nam(new QNetworkAccessManager(this))
 {
 }
+
+AddonRegistry::~AddonRegistry() = default;
 
 QVariantMap AddonRegistry::parseManifest(const QString& url,
                                          const QByteArray& body)
@@ -39,42 +47,85 @@ QVariantMap AddonRegistry::parseManifest(const QString& url,
     return out;
 }
 
+namespace {
+QVariantMap placeholderRow(const QString& url)
+{
+    return QVariantMap{
+        {QStringLiteral("url"),     url},
+        {QStringLiteral("id"),      QString()},
+        {QStringLiteral("name"),    url},
+        {QStringLiteral("types"),   QStringList()},
+        {QStringLiteral("enabled"), true},
+    };
+}
+} // namespace
+
 void AddonRegistry::load()
 {
+    AddonStore::migrateLegacyIndexedEntries(*m_cache);
+
     m_addons.clear();
-    nuvio::settings::PropertiesStore store(
-        nuvio::settings::PropertiesStore::defaultPath("qt-addons"));
-    for (int i = 0; i < 512; ++i) {
-        const auto raw = store.getString(
-            QStringLiteral("addon_%1").arg(i).toStdString());
-        if (!raw) continue;
-        const auto entry =
-            QJsonDocument::fromJson(QByteArray::fromStdString(*raw))
-                .object()
-                .toVariantMap();
-        if (!entry.isEmpty()) m_addons.append(entry);
+    const auto urls = AddonStore::loadInstalledUrls(*m_truth);
+    const auto enabled = AddonStore::loadEnabledStates(*m_truth);
+
+    for (const QString& url : urls) {
+        const QByteArray cached = AddonStore::loadCachedManifest(*m_cache, url);
+        QVariantMap row;
+        if (!cached.isEmpty()) {
+            row = parseManifest(url, cached);
+            if (row.isEmpty()) row = placeholderRow(url);  // stale cache
+        } else {
+            row = placeholderRow(url);
+            fetchManifest(url);                            // async fill-in
+        }
+        row[QStringLiteral("enabled")] = enabled.value(url, true);
+        m_addons.append(row);
     }
     emit changed();
 }
 
+void AddonRegistry::rebuildRow(const QString& url, const QByteArray& body)
+{
+    const QVariantMap manifest = parseManifest(url, body);
+    for (int i = 0; i < m_addons.size(); ++i) {
+        QVariantMap row = m_addons[i].toMap();
+        if (row.value("url").toString() != url) continue;
+        if (!manifest.isEmpty()) {
+            manifest[QStringLiteral("enabled")] =
+                row.value(QStringLiteral("enabled"), true);
+            m_addons[i] = manifest;
+        }
+        break;
+    }
+    emit changed();
+}
+
+void AddonRegistry::fetchManifest(const QString& url)
+{
+    QNetworkRequest req{QUrl(url)};
+    req.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
+                     QNetworkRequest::NoLessSafeRedirectPolicy);
+    auto* rep = m_nam->get(req);
+    connect(rep, &QNetworkReply::finished, this, [this, rep, url] {
+        rep->deleteLater();
+        if (rep->error() != QNetworkReply::NoError) return;
+        const QByteArray body = rep->readAll();
+        AddonStore::saveCachedManifest(*m_cache, url, body);
+        m_cache->persist();
+        rebuildRow(url, body);
+    });
+}
+
 void AddonRegistry::add(const QString& manifestUrlIn)
 {
-    QString url = manifestUrlIn.trimmed();
+    const QString url = AddonStore::normalizeManifestUrl(manifestUrlIn);
     if (url.isEmpty()) { emit addResult(false, "URL required"); return; }
-    if (!url.startsWith(QLatin1String("http"))) {
-        url = QStringLiteral("https://") + url;
+
+    const QStringList urls = AddonStore::loadInstalledUrls(*m_truth);
+    if (urls.contains(url)) {
+        emit addResult(false, "Already installed");
+        return;
     }
-    if (!url.contains(QLatin1String("manifest.json"))) {
-        while (url.endsWith(QLatin1Char('/'))) url.chop(1);
-        url += QStringLiteral("/manifest.json");
-    }
-    // dedupe by URL
-    for (const auto& a : m_addons)
-        if (a.toMap().value("url").toString().compare(url,
-                Qt::CaseInsensitive) == 0) {
-            emit addResult(false, "Already installed");
-            return;
-        }
 
     QNetworkRequest req{QUrl(url)};
     req.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
@@ -88,61 +139,77 @@ void AddonRegistry::add(const QString& manifestUrlIn)
                                .arg(rep->errorString()));
             return;
         }
-        finishAdd(url, rep->readAll());
-    });
-}
-
-void AddonRegistry::finishAdd(const QString& normalizedUrl,
-                              const QByteArray& body)
-{
-    const QVariantMap manifest = parseManifest(normalizedUrl, body);
-    if (manifest.isEmpty()) {
-        emit addResult(false, "Not a valid Stremio manifest");
-        return;
-    }
-    // dedupe by id too (same addon via alternate mirror URL)
-    const QString newId = manifest.value("id").toString();
-    for (const auto& a : m_addons)
-        if (a.toMap().value("id").toString() == newId) {
-            emit addResult(false, "Already installed (mirror)");
+        const QByteArray body = rep->readAll();
+        if (parseManifest(url, body).isEmpty()) {
+            emit addResult(false, "Not a valid Stremio manifest");
             return;
         }
+        // Install: truth urls + enabled(true) + manifest cache.
+        QStringList next = AddonStore::loadInstalledUrls(*m_truth);
+        if (!next.contains(url)) next << url;             // race guard
+        AddonStore::saveInstalledUrls(*m_truth, next);
 
-    m_addons.append(manifest);
-    persist();
-    emit changed();
-    emit addResult(true,
-                   QStringLiteral("Installed: %1")
-                       .arg(manifest.value("name").toString()));
+        auto enabled = AddonStore::loadEnabledStates(*m_truth);
+        enabled.insert(url, true);
+        AddonStore::saveEnabledStates(*m_truth, enabled);
+        m_truth->persist();
+
+        AddonStore::saveCachedManifest(*m_cache, url, body);
+        m_cache->persist();
+
+        QVariantMap row = parseManifest(url, body);
+        row.insert(QStringLiteral("enabled"), true);
+        m_addons.append(row);
+
+        emit changed();
+        emit addResult(true,
+                       QStringLiteral("Installed: %1")
+                           .arg(row.value("name").toString()));
+    });
 }
 
 void AddonRegistry::remove(const QString& id)
 {
+    if (id.isEmpty()) return;
     for (int i = 0; i < m_addons.size(); ++i) {
-        if (m_addons[i].toMap().value("id").toString() == id) {
-            m_addons.removeAt(i);
-            persist();
-            emit changed();
-            emit removed(id);
-            return;
-        }
+        const QVariantMap row = m_addons[i].toMap();
+        if (row.value("id").toString() != id) continue;
+        const QString url = row.value("url").toString();
+
+        m_addons.removeAt(i);
+
+        QStringList urls = AddonStore::loadInstalledUrls(*m_truth);
+        urls.removeAll(url);
+        AddonStore::saveInstalledUrls(*m_truth, urls);
+
+        auto enabled = AddonStore::loadEnabledStates(*m_truth);
+        enabled.remove(url);
+        AddonStore::saveEnabledStates(*m_truth, enabled);
+        m_truth->persist();
+
+        AddonStore::removeCachedManifest(*m_cache, url);
+        m_cache->persist();
+
+        emit changed();
+        emit removed(id);
+        return;
     }
 }
 
-void AddonRegistry::persist()
+void AddonRegistry::setEnabled(const int index, const bool on)
 {
-    nuvio::settings::PropertiesStore store(
-        nuvio::settings::PropertiesStore::defaultPath("qt-addons"));
-    for (int i = 0; i < 256; ++i)   // clear previous high-water marks
-        store.remove(QStringLiteral("addon_%1").arg(i).toStdString());
-    int n = 0;
-    for (const auto& a : m_addons) {
-        const QByteArray j = QJsonDocument::fromVariant(a)
-                                 .toJson(QJsonDocument::Compact);
-        store.putString(QStringLiteral("addon_%1").arg(n).toStdString(),
-                        std::string(j.constData(), size_t(j.size())));
-        ++n;
-    }
+    if (index < 0 || index >= m_addons.size()) return;
+    QVariantMap row = m_addons[index].toMap();
+    const QString url = row.value("url").toString();
+    if (url.isEmpty() || row.value("enabled", true) == on) return;
+    row[QStringLiteral("enabled")] = on;
+    m_addons[index] = row;
+
+    auto enabled = AddonStore::loadEnabledStates(*m_truth);
+    enabled.insert(url, on);
+    AddonStore::saveEnabledStates(*m_truth, enabled);
+    m_truth->persist();
+    emit changed();
 }
 
 } // namespace nuvio::library
