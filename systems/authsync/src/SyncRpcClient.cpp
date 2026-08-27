@@ -46,16 +46,14 @@ void SyncRpcClient::call(const QString& fnName, const QJsonObject& params)
 
         if (rep->error() != QNetworkReply::NoError || status < 200 ||
             status >= 300) {
-            qWarning("SyncRpc: %s failed (http=%d): %s",
-                     "rpc", status, raw.constData());
-            emit finished(false, status, QJsonObject{
-                {QStringLiteral("error"), QString::fromUtf8(raw)}});
+            qWarning("SyncRpc: rpc failed (http=%d): %s", status,
+                     raw.constData());
+            emit finished(false, status, QJsonDocument(QJsonObject{
+                {QStringLiteral("error"), QString::fromUtf8(raw)}}));
             return;
         }
 
-        QJsonDocument doc = QJsonDocument::fromJson(raw);
-        emit finished(true, status,
-                      doc.isObject() ? doc.object() : QJsonObject{});
+        emit finished(true, status, QJsonDocument::fromJson(raw));
     });
 }
 

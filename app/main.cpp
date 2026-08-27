@@ -29,6 +29,7 @@
 #include "nuvio/authsync/SyncOrchestrator.h"
 #include "nuvio/library/AddonRegistry.h"
 #include "nuvio/settings/PropertiesStore.h"
+#include "nuvio/settings/SearchHistory.h"
 #include "nuvio/settings/SyncIdentity.h"
 #include "nuvio/library/CatalogService.h"
 #include "nuvio/library/MetaService.h"
@@ -320,6 +321,13 @@ int main(int argc, char* argv[])
     engine.rootContext()->setContextProperty(
         QStringLiteral("catalog"), QVariant::fromValue<QObject*>(
                                         catalog.get()));
+    // Recent searches (Compose search_history.properties parity); the QML
+    // search page records/filters through this single instance.
+    auto searchHistory =
+        std::make_unique<nuvio::settings::SearchHistory>();
+    engine.rootContext()->setContextProperty(
+        QStringLiteral("searchHistory"),
+        QVariant::fromValue<QObject*>(searchHistory.get()));
     engine.rootContext()->setContextProperty(
         QStringLiteral("meta"), QVariant::fromValue<QObject*>(
                                     metaSvc.get()));

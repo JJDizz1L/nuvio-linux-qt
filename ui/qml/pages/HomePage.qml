@@ -133,6 +133,11 @@ Item {
         }
         Button {
             anchors.horizontalCenter: parent.horizontalCenter
+            text: qsTr("Search")
+            onClicked: navigation.pushIfDifferent("search")
+        }
+        Button {
+            anchors.horizontalCenter: parent.horizontalCenter
             text: qsTr("Settings")
             onClicked: navigation.pushIfDifferent("settings")
         }

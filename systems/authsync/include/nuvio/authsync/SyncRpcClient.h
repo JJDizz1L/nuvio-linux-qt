@@ -13,6 +13,7 @@
 // TESTED against a local TCP fake endpoint asserting headers/body byte-level.
 
 #include <QByteArray>
+#include <QJsonDocument>
 #include <QJsonObject>
 #include <QObject>
 
@@ -45,8 +46,10 @@ public:
     void call(const QString& fnName, const QJsonObject& params);
 
 signals:
-    /// ok=false carries the HTTP status + raw error body text for logs.
-    void finished(bool ok, int httpStatus, QJsonObject response);
+    /// ok=false carries the HTTP status; response holds the decoded body -
+    /// postgrest functions commonly answer with a JSON ARRAY root, so this
+    /// is the DOCUMENT, not a forced object.
+    void finished(bool ok, int httpStatus, QJsonDocument response);
 
 private:
     AuthConfig m_cfg;

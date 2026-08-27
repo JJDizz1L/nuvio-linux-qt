@@ -49,7 +49,7 @@ public:
 
     /// Parse an already-fetched body into the named shelf and emit
     /// shelvesChanged. Public so the offline suite can drive parsing
-    /// deterministically (network path funnels through here too).
+    /// deterministically (network path funnels here too).
     Q_INVOKABLE void ingest(const QString& type, const QString& catalogId,
                             const QByteArray& body);
 
@@ -57,21 +57,54 @@ public:
     [[nodiscard]] static QVariantMap itemFromMeta(const QVariantMap& meta,
                                                   const QByteArray& baseUrl);
 
+    // ---- search (Cinemeta "search=<q>" catalogs) ---------------------------
+    // One query fans out to movie+series in parallel; results land in two
+    // flat lists and never touch the rail shelves.
+    Q_INVOKABLE void search(const QString& query);
+    Q_INVOKABLE void clearSearch();
+
+    Q_PROPERTY(bool          searchActive READ searchActive
+                                   NOTIFY searchChanged)
+    Q_PROPERTY(QString       searchError  READ searchError
+                                   NOTIFY searchChanged)
+    Q_PROPERTY(QVariantList  searchMovieResults  READ searchMovieResults
+                                   NOTIFY searchChanged)
+    Q_PROPERTY(QVariantList  searchSeriesResults READ searchSeriesResults
+                                   NOTIFY searchChanged)
+
+    [[nodiscard]] bool         searchActive() const { return m_searchActive; }
+    [[nodiscard]] QString      searchError()  const { return m_searchError; }
+    [[nodiscard]] QVariantList searchMovieResults()  const
+        { return m_searchMovies; }
+    [[nodiscard]] QVariantList searchSeriesResults() const
+        { return m_searchSeries; }
+
 signals:
     void catalogReady(QString type, QString catalogId, QVariantList items);
     void shelvesChanged();
+    void searchChanged();
 
 private:
     void handleReply(const QString& type, const QString& catalogId,
                      const QByteArray& body);
+    void handleSearchReply(const QString& type, const QByteArray& body,
+                           int seq);
     [[nodiscard]] static QString shelfTitle(const QString& type,
                                             const QString& catalogId);
     [[nodiscard]] int  indexOfShelf(const QString& type,
                                     const QString& catalogId) const;
     static QVariantMap newShelf(const QString& type,
                                 const QString& catalogId);
+    [[nodiscard]] static QVariantList parseMetas(const QByteArray& body,
+                                                 const QByteArray& baseUrl,
+                                                 int* droppedCount = nullptr);
     QVariantList       m_shelves;
     QStringList        m_order;   // "type/catalogId" in display order
+
+    bool        m_searchActive = false;
+    QString     m_searchError;
+    QVariantList m_searchMovies, m_searchSeries;
+    int         m_searchSeq = 0;   // stale-reply guard
 
     QNetworkAccessManager* m_nam = nullptr;
     QByteArray m_baseUrl;

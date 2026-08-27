@@ -57,6 +57,10 @@ ApplicationWindow {
         anchors.fill: parent
         visible: navigation.currentRoute === "library"
     }
+    Pages.SearchPage {
+        anchors.fill: parent
+        visible: navigation.currentRoute === "search"
+    }
     Pages.MetaPage {
         anchors.fill: parent
         visible: navigation.currentRoute === "meta"

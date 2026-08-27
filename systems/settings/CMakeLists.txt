@@ -6,6 +6,7 @@ add_library(nuvio_settings STATIC
     include/nuvio/settings/SyncIdentity.h      src/SyncIdentity.cpp
     include/nuvio/settings/SyncPreferenceJson.h src/SyncPreferenceJson.cpp
     include/nuvio/settings/SyncPlayerSettings.h src/SyncPlayerSettings.cpp
+    include/nuvio/settings/SearchHistory.h     src/SearchHistory.cpp
     src/SettingsSystem.cpp)
 target_include_directories(nuvio_settings PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_link_libraries(nuvio_settings PUBLIC Qt6::Core)
@@ -32,3 +33,7 @@ add_executable(nuvio_sync_player_tests tests/SyncPlayerSettingsTests.cpp)
 target_link_libraries(nuvio_sync_player_tests PRIVATE nuvio_settings Qt6::Core)
 nuvio_common_target_props(nuvio_sync_player_tests)
 add_test(NAME nuvio_sync_player COMMAND nuvio_sync_player_tests)
+add_executable(nuvio_search_history_tests tests/SearchHistoryTests.cpp)
+target_link_libraries(nuvio_search_history_tests PRIVATE nuvio_settings Qt6::Core)
+nuvio_common_target_props(nuvio_search_history_tests)
+add_test(NAME nuvio_search_history COMMAND nuvio_search_history_tests)

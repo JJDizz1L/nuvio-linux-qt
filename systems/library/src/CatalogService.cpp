@@ -53,6 +53,35 @@ QVariantMap CatalogService::itemFromMeta(const QVariantMap& meta,
 
 void CatalogService::fetch(const QString& type, const QString& catalogId)
 {
+    if (catalogId.startsWith(QLatin1String("search=")))
+    {
+        // Search catalogs route to the dedicated results state; seq token
+        // keeps a slow earlier query from overwriting a later one.
+        const int seq = ++m_searchSeq;
+        m_searchActive = true;
+        QUrl url(QString::fromUtf8(m_baseUrl) + QStringLiteral("/catalog/") +
+                 type + QLatin1Char('/') + catalogId +
+                 QStringLiteral(".json"));
+        QNetworkRequest req{url};
+        req.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
+                         QNetworkRequest::NoLessSafeRedirectPolicy);
+        req.setRawHeader("Accept", "application/json");
+        auto* rep = m_nam->get(req);
+        connect(rep, &QNetworkReply::finished, this,
+                [this, rep, type, seq] {
+                    rep->deleteLater();
+                    if (seq != m_searchSeq) return;   // superseded
+                    if (rep->error() != QNetworkReply::NoError) {
+                        m_searchError = rep->errorString();
+                        emit searchChanged();
+                        return;
+                    }
+                    handleSearchReply(type, rep->readAll(), seq);
+                });
+        emit searchChanged();
+        return;
+    }
+
     const QUrl url(QString::fromUtf8(m_baseUrl) + QStringLiteral("/catalog/") +
                    type + QLatin1Char('/') + catalogId +
                    QStringLiteral(".json"));
@@ -70,6 +99,50 @@ void CatalogService::fetch(const QString& type, const QString& catalogId)
         }
         ingest(type, catalogId, rep->readAll());
     });
+}
+
+void CatalogService::search(const QString& queryIn)
+{
+    const QString q = queryIn.trimmed();
+    if (q.length() < 2) { clearSearch(); return; }
+
+    const QByteArray encoded =
+        QUrl::toPercentEncoding(q);
+    m_searchError.clear();
+    m_searchMovies.clear();
+    m_searchSeries.clear();
+    for (const char* t : {"movie", "series"})
+        fetch(QLatin1String(t),
+              QStringLiteral("search=") +
+                  QString::fromUtf8(encoded));
+}
+
+void CatalogService::clearSearch()
+{
+    ++m_searchSeq;              // invalidate any in-flight replies
+    m_searchActive = false;
+    m_searchError.clear();
+    m_searchMovies.clear();
+    m_searchSeries.clear();
+    emit searchChanged();
+}
+
+void CatalogService::handleSearchReply(const QString& type,
+                                       const QByteArray& body, int seq)
+{
+    int dropped = 0;
+    QVariantList items = parseMetas(body, m_baseUrl, &dropped);
+    if (dropped > 0)
+        std::fprintf(stderr, "search: dropped %d malformed entries (%s)\n",
+                     dropped, qPrintable(type));
+
+    if (type == QLatin1String("movie"))       m_searchMovies  = items;
+    else if (type == QLatin1String("series")) m_searchSeries = items;
+
+    // Both legs home -> leave loading state.
+    static_cast<void>(seq);
+    m_searchActive = false;
+    emit searchChanged();
 }
 
 QString CatalogService::shelfTitle(const QString& type,
@@ -124,16 +197,8 @@ void CatalogService::loadShelves()
 void CatalogService::ingest(const QString& type, const QString& catalogId,
                             const QByteArray& body)
 {
-    QVariantList items;
     int dropped = 0;
-    const QJsonDocument doc = QJsonDocument::fromJson(body);
-    const QJsonArray metas = doc.object().value(QLatin1String("metas")).toArray();
-    for (const auto& v : metas) {
-        const QVariantMap item = itemFromMeta(v.toObject().toVariantMap(),
-                                              m_baseUrl);
-        if (item.isEmpty()) { ++dropped; continue; }
-        items.append(item);
-    }
+    QVariantList items = parseMetas(body, m_baseUrl, &dropped);
     if (dropped > 0)
         std::fprintf(stderr,
                      "catalog: dropped %d malformed entries (%s/%s)\n",
@@ -153,6 +218,25 @@ void CatalogService::ingest(const QString& type, const QString& catalogId,
     shelf[QLatin1String("loading")] = false;
     m_shelves[idx] = shelf;
     emit shelvesChanged();
+}
+
+QVariantList CatalogService::parseMetas(const QByteArray& body,
+                                        const QByteArray& baseUrl,
+                                        int* droppedCount)
+{
+    QVariantList items;
+    int dropped = 0;
+    const QJsonDocument doc = QJsonDocument::fromJson(body);
+    const QJsonArray metas =
+        doc.object().value(QLatin1String("metas")).toArray();
+    for (const auto& v : metas) {
+        const QVariantMap item = itemFromMeta(v.toObject().toVariantMap(),
+                                              baseUrl);
+        if (item.isEmpty()) { ++dropped; continue; }
+        items.append(item);
+    }
+    if (droppedCount) *droppedCount = dropped;
+    return items;
 }
 
 void CatalogService::handleReply(const QString& type,
