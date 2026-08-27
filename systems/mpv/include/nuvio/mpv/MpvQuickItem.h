@@ -111,6 +111,7 @@ private:
     QPointer<MpvController> m_controller;
     PlaybackSnapshot        m_cachedSnap;
     double                  m_volume = 100.0;
+    bool                    m_connectionsDone = false;
     std::atomic<bool>       m_statsAttached{false};
     std::weak_ptr<RenderStats> m_renderStats;
 };

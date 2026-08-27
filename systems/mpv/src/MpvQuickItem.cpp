@@ -60,6 +60,9 @@ QString MpvQuickItem::hwdecCurrent() const { return m_cachedSnap.hwdecCurrent; }
 void MpvQuickItem::setControllerObj(QObject* obj)
 {
     auto* c = qobject_cast<MpvController*>(obj);
+    std::fprintf(stderr, "[nuvio.qt] setControllerObj obj=%p resolved=%p this=%p\n",
+                 static_cast<void*>(obj), static_cast<void*>(c),
+                 static_cast<void*>(this));
     if (c == m_controller.data()) return;
     m_controller = c;
     ensureConnections();
@@ -68,24 +71,22 @@ void MpvQuickItem::setControllerObj(QObject* obj)
 
 void MpvQuickItem::ensureConnections()
 {
+    // Connect EAGERLY once: mpv signals cannot fire before the worker
+    // finishes init, so there is zero benefit to a ready-gated deferred
+    // connect — and that deferred variant raced (snapshot pipe stayed dead).
     MpvController* c = m_controller.data();
-    if (!c || !c->isReady()) {
-        if (c)
-            connect(c, &MpvController::ready, this,
-                    [this](bool ok, const QString&) {
-                        if (ok) ensureConnections();
-                    }, Qt::QueuedConnection);
-        return;
-    }
-    connect(c, &MpvController::snapshotChanged,
+    if (!c || m_connectionsDone) return;
+    m_connectionsDone = true;
+
+    const bool okA = connect(c, &MpvController::snapshotChanged,
             this, &MpvQuickItem::applySnapshot, Qt::QueuedConnection);
-    connect(c, &MpvController::reachedEnd, this, [this, c] {
+    const bool okB = connect(c, &MpvController::reachedEnd, this, [this, c] {
         PlaybackSnapshot s = c->snapshot();
         s.eofReached = true;
         applySnapshot(std::move(s));
     }, Qt::QueuedConnection);
-    // Hand renderer diagnostics channel over once a live handle exists.
-    // (RenderStats wiring lands with the smoke harness; weak link here.)
+    std::fprintf(stderr, "[nuvio.qt] connections snap=%d eof=%d ctrl=%p\n",
+                 int(okA), int(okB), static_cast<void*>(c));
 }
 
 void MpvQuickItem::setVolumePercent(int percent)
@@ -102,6 +103,11 @@ void MpvQuickItem::setVolumePercent(int percent)
 
 void MpvQuickItem::applySnapshot(PlaybackSnapshot snap)
 {
+    static std::atomic<int> firstDeliveryLog{0};
+    if (firstDeliveryLog.fetch_add(1) == 0)
+        std::fprintf(stderr, "[nuvio.qt] FIRST applySnapshot pos=%lf dur=%lf\n",
+                     snap.positionSec, snap.durationSec);
+
     const bool wasMedia = m_cachedSnap.hasMedia();
     const bool mediaNow = snap.hasMedia();
     m_cachedSnap = snap;
