@@ -156,13 +156,19 @@ QString TrailerResolver::resolveReachableUrlOrNull(
 
 void TrailerResolver::resolveForKey(const QString& keyOrUrl)
 {
-    m_ambient = false;
+    m_mode = Mode::Playback;
     beginResolve(keyOrUrl);
 }
 
 void TrailerResolver::resolveForKeyAmbient(const QString& keyOrUrl)
 {
-    m_ambient = true;
+    m_mode = Mode::Ambient;
+    beginResolve(keyOrUrl);
+}
+
+void TrailerResolver::resolveForKeyPreview(const QString& keyOrUrl)
+{
+    m_mode = Mode::Preview;
     beginResolve(keyOrUrl);
 }
 
@@ -170,8 +176,11 @@ void TrailerResolver::beginResolve(const QString& keyOrUrl)
 {
     const QString videoId = extractVideoId(keyOrUrl);
     if (videoId.isEmpty()) {
-        if (m_ambient) emit ambientFailed(QStringLiteral("invalid YouTube url"));
-        else           emit trailerFailed(QStringLiteral("invalid YouTube url"));
+        switch (m_mode) {
+        case Mode::Ambient: emit ambientFailed(QStringLiteral("invalid YouTube url")); break;
+        case Mode::Preview: emit previewFailed(QStringLiteral("invalid YouTube url")); break;
+        default:            emit trailerFailed(QStringLiteral("invalid YouTube url")); break;
+        }
         return;
     }
     if (m_resolving) return;             // one in-flight resolution only
@@ -281,12 +290,19 @@ void TrailerResolver::runResolveWorker(const QString& videoId)
     QMetaObject::invokeMethod(
         this,
         [this, ok, videoUrl, audioUrl, reason] {
-            if (ok) {
-                if (m_ambient) emit ambientResolved(videoUrl, audioUrl);
-                else           emit trailerResolved(videoUrl, audioUrl);
-            } else {
-                if (m_ambient) emit ambientFailed(reason);
-                else           emit trailerFailed(reason);
+            switch (m_mode) {
+            case Mode::Ambient:
+                if (ok) emit ambientResolved(videoUrl, audioUrl);
+                else    emit ambientFailed(reason);
+                break;
+            case Mode::Preview:
+                if (ok) emit previewResolved(videoUrl, audioUrl);
+                else    emit previewFailed(reason);
+                break;
+            default:
+                if (ok) emit trailerResolved(videoUrl, audioUrl);
+                else    emit trailerFailed(reason);
+                break;
             }
             m_resolving = false;
             emit resolvingChanged();

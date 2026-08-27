@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Controls
+import Nuvio.Mpv 1.0
 import "../theme"
 
 Item {
@@ -11,6 +12,106 @@ Item {
     property bool anyLoading: false
 
     Component.onCompleted: catalog.loadShelves()
+
+    // ---- poster hover trailer preview (Compose parity) ----------------------
+    // Hover a rail poster for ~2s -> fetch its meta, resolve the first
+    // YouTube trailer in PREVIEW mode, and play it muted in a popup over the
+    // card (single shared hero mpv instance; routes are exclusive so the
+    // instance is idle while browsing the library).
+    property string previewKey: ""        // "type:id" of the hovered card
+    property string previewTitle: ""
+    property string previewType: ""
+    property point previewPos: Qt.point(0, 0)
+    readonly property bool previewVisible: previewKey !== ""
+
+    function requestPreview(type, id, name, pos) {
+        if (typeof heroController === "undefined") return
+        const k = type + ":" + id
+        if (library.previewKey === k) return
+        library.stopPreview()
+        library.previewKey = k
+        library.previewType = type
+        library.previewTitle = name
+        library.previewPos = pos
+        meta.load(type, id, name)         // async; currentChanged continues
+    }
+    function stopPreview() {
+        if (library.previewKey === "") return
+        library.previewKey = ""
+        if (typeof heroController !== "undefined")
+            heroController.enqueueCommand(["stop"])
+    }
+    function extractPreviewKey() {
+        const list = meta.current.trailers || []
+        for (let i = 0; i < list.length; ++i)
+            if (list[i].provider === "youtube") return list[i].key
+        return ""
+    }
+
+    Connections {
+        target: meta
+        function onCurrentChanged() {
+            if (library.previewKey === "") return
+            const c = meta.current
+            if ((c.id || "") + "" !==
+                library.previewKey.substring(library.previewType.length + 1))
+                return
+            const key = library.extractPreviewKey()
+            if (key !== "") trailer.resolveForKeyPreview(key)
+            else library.stopPreview()
+        }
+    }
+    Connections {
+        target: trailer
+        function onPreviewResolved(url, audioUrl) {
+            if (library.previewKey === "") return
+            heroController.play(url, audioUrl || "", 0)
+        }
+        function onPreviewFailed(reason) { library.stopPreview() }
+    }
+    // Popup surface (positioned over the hovered card).
+    Rectangle {
+        id: previewPopup
+        visible: library.previewKey !== ""
+        x: library.previewPos.x
+        y: Math.max(8, library.previewPos.y - 8)
+        width: 264
+        height: 200
+        radius: 8
+        color: "#101014"
+        border.color: Theme.accent
+        border.width: 1
+        clip: true
+        z: 50
+        MpvItem {
+            id: previewMpv
+            anchors.fill: parent
+            controller: (typeof heroController !== "undefined")
+                            ? heroController : null
+        }
+        Text {
+            anchors.left: parent.left
+            anchors.bottom: parent.bottom
+            anchors.margins: 8
+            text: library.previewTitle
+            color: "#ffffff"
+            font.pixelSize: 12
+            font.weight: Font.DemiBold
+            styleColor: "#000000"
+            style: Text.Outline
+        }
+        MouseArea {
+            anchors.fill: parent
+            onClicked: {
+                const parts = library.previewKey.split(":")
+                meta.load(parts[0],
+                          library.previewKey.substring(parts[0].length + 1),
+                          library.previewTitle)
+                library.stopPreview()
+                navigation.push("meta")
+            }
+        }
+    }
 
     Connections {
         target: catalog
@@ -137,12 +238,35 @@ Item {
                             // actions (which funnel through the same
                             // playback session).
                             MouseArea {
+                                id: cardArea
                                 anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
                                 onClicked: {
+                                    hoverTimer.stop()
                                     meta.load(shelfInfo.type,
                                               modelData.id,
                                               modelData.name)
                                     navigation.push("meta")
+                                }
+                                Timer {
+                                    id: hoverTimer
+                                    interval: 2000
+                                    onTriggered: {
+                                        if (!cardArea.containsMouse) return
+                                        library.requestPreview(
+                                            shelfInfo.type,
+                                            modelData.id,
+                                            modelData.name,
+                                            cardArea.mapToItem(library, -65, 0))
+                                    }
+                                }
+                                onContainsMouseChanged: {
+                                    if (containsMouse) hoverTimer.restart()
+                                    else {
+                                        hoverTimer.stop()
+                                        library.stopPreview()
+                                    }
                                 }
                             }
                             Text {

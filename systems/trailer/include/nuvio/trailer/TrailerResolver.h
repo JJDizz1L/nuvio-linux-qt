@@ -36,6 +36,9 @@ public:
     /// ambientResolved/ambientFailed so the shell's playback-route hijack
     /// never fires for background autoplays.
     Q_INVOKABLE void resolveForKeyAmbient(const QString& keyOrUrl);
+    /// Preview (poster-hover) variant: completion emits previewResolved /
+    /// previewFailed. Mutually exclusive with the other two modes per call.
+    Q_INVOKABLE void resolveForKeyPreview(const QString& keyOrUrl);
 
     [[nodiscard]] bool isResolving() const { return m_resolving; }
 
@@ -44,6 +47,8 @@ signals:
     void trailerFailed(const QString& reason);
     void ambientResolved(const QString& url, const QString& audioUrl);
     void ambientFailed(const QString& reason);
+    void previewResolved(const QString& url, const QString& audioUrl);
+    void previewFailed(const QString& reason);
     void resolvingChanged();
 
 private:
@@ -68,7 +73,9 @@ private:
     bool isUrlReachable(QNetworkAccessManager& nam, const QString& url);
 
     bool m_resolving = false;        // read/written on the QML thread only
-    bool m_ambient   = false;        // mode of the in-flight resolution
+    // Mode of the in-flight resolution: routes the terminal signal.
+    enum class Mode { Playback, Ambient, Preview };
+    Mode m_mode = Mode::Playback;
     mutable std::mutex m_cacheMutex; // guards m_visitorData (worker-written)
     QString m_visitorData;
 };
