@@ -20,6 +20,7 @@
 #include "nuvio/authsync/AuthService.h"
 #include "nuvio/library/AddonRegistry.h"
 #include "nuvio/library/CatalogService.h"
+#include "nuvio/playback/StreamResolver.h"
 #include "nuvio/ui/NavigationModel.h"
 #include "nuvio/ui/PreferencesApplier.h"
 #include "nuvio/settings/AppSettings.h"
@@ -101,6 +102,45 @@ int main(int argc, char* argv[])
     auto catalog    = std::make_unique<nuvio::library::CatalogService>();
     auto addonreg   = std::make_unique<nuvio::library::AddonRegistry>();
     addonreg->load();
+
+    // Streams resolve against the user-installed addon set; kept in sync
+    // whenever the registry changes (install/remove).
+    auto streamResolver =
+        std::make_unique<nuvio::playback::StreamResolver>();
+    const auto syncResolverAddons = [streamResolverPtr = streamResolver.get(),
+                                     registryPtr = addonreg.get()] {
+        QVariantList list;
+        for (const auto& a : registryPtr->addons()) {
+            const auto m      = a.toMap();
+            const QString url = m.value("url").toString();
+            if (url.isEmpty()) continue;
+            list.append(QVariantMap{
+                {"id",   m.value("id").toString()},
+                {"name", m.value("name").toString()},
+                {"url",  url}});
+        }
+        streamResolverPtr->setAddons(list);
+    };
+    syncResolverAddons();
+    QObject::connect(addonreg.get(),
+                     &nuvio::library::AddonRegistry::changed,
+                     syncResolverAddons);
+    QObject::connect(
+        streamResolver.get(),
+        &nuvio::playback::StreamResolver::resolutionComplete,
+        [](const QString& type, const QString& imdbId,
+           const QVariantMap& best) {
+            if (best.isEmpty())
+                std::fprintf(stderr,
+                             "stream: %s/%s -> no direct source "
+                             "(torrent-only or unreachable)\n",
+                             qPrintable(type), qPrintable(imdbId));
+            else
+                std::fprintf(stderr, "stream: %s/%s -> %s [%s]\n",
+                             qPrintable(type), qPrintable(imdbId),
+                             qPrintable(best.value("url").toString()),
+                             qPrintable(best.value("source").toString()));
+        });
     auth->restoreSession();
     catalog->loadShelves();     // stored tokens -> active or silent refresh
 
@@ -123,6 +163,9 @@ int main(int argc, char* argv[])
     engine.rootContext()->setContextProperty(
         QStringLiteral("addons"), QVariant::fromValue<QObject*>(
                                        addonreg.get()));
+    engine.rootContext()->setContextProperty(
+        QStringLiteral("streams"), QVariant::fromValue<QObject*>(
+                                         streamResolver.get()));
     engine.rootContext()->setContextProperty(
         QStringLiteral("catalog"), QVariant::fromValue<QObject*>(
                                         catalog.get()));
