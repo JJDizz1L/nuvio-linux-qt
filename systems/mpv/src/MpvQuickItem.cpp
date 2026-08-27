@@ -57,6 +57,11 @@ bool   MpvQuickItem::buffering() const
 int     MpvQuickItem::volumePercent() const { return int(qRound(m_volume)); }
 QString MpvQuickItem::hwdecCurrent() const { return m_cachedSnap.hwdecCurrent; }
 
+double MpvQuickItem::cacheSeconds() const
+{
+    return m_cachedSnap.demuxerCacheSec;
+}
+
 void MpvQuickItem::setControllerObj(QObject* obj)
 {
     auto* c = qobject_cast<MpvController*>(obj);
@@ -118,6 +123,7 @@ void MpvQuickItem::applySnapshot(PlaybackSnapshot snap)
     emit pausedChanged();
     emit bufferingChanged();
     emit hwdecCurrentChanged();
+    emit cacheSecondsChanged();
 }
 
 // ---- QML API ---------------------------------------------------------------

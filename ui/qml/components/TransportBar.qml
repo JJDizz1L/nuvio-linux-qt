@@ -53,6 +53,36 @@ Rectangle {
                 if (!pressed) bar.mpv.seekToSeconds(value / 1000.0)
             }
             onMoved: if (dragging) value = value     // keeps visual position
+
+            // custom track: buffered range behind the played fill
+            background: Rectangle {
+                x: seekSlider.leftPadding
+                y: seekSlider.topPadding
+                   + seekSlider.availableHeight / 2 - height / 2
+                width: seekSlider.availableWidth
+                height: 4
+                radius: 2
+                color: Theme.surfaceHigh
+
+                Rectangle {   // buffered (demuxer cache ahead of playhead)
+                    visible: bar.mpv.hasMedia && bar.mpv.cacheSeconds > 0
+                    width: parent.width * Math.min(
+                               1,
+                               bar.mpv.cacheSeconds
+                               / Math.max(bar.mpv.durationMs / 1000.0, 1))
+                    height: parent.height
+                    radius: 2
+                    x: seekSlider.visualPosition * parent.width
+                    color: Theme.textDisabled
+                    opacity: 0.45
+                }
+                Rectangle {   // played range
+                    width: seekSlider.visualPosition * parent.width
+                    height: parent.height
+                    radius: 2
+                    color: Theme.accent
+                }
+            }
         }
 
         Label {

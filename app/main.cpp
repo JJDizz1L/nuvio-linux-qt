@@ -3,6 +3,8 @@
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
 #include <QQuickStyle>
+#include <QTimer>
+#include <algorithm>
 
 #include <clocale>
 #include <cstdio>
@@ -32,6 +34,7 @@
 #include "nuvio/ui/NavigationModel.h"
 #include "nuvio/ui/PreferencesApplier.h"
 #include "nuvio/settings/AppSettings.h"
+#include "nuvio/settings/PropertiesStore.h"
 #include "nuvio/ui/PosterProvider.h"
 #include "nuvio/ui/UiBootstrap.h"
 
@@ -267,6 +270,39 @@ int main(int argc, char* argv[])
         QMetaObject::invokeMethod(root, "playFromLaunch",
                                   Q_ARG(QVariant, launchUrl));
     }
+
+    // Player runtime persistence: volume level rides the shared profile
+    // exactly like DesktopPlayerVolumeStorage (store nuvio_player_runtime,
+    // key volume_level as a 0..1 float, 250 ms debounce on writes).
+    {
+        auto runtime =
+            std::make_unique<nuvio::settings::PropertiesStore>(
+                nuvio::settings::PropertiesStore::defaultPath(
+                    "nuvio_player_runtime"));
+        if (auto* item = root->findChild<nuvio::mpv::MpvQuickItem*>()) {
+            if (const auto stored = runtime->getFloat("volume_level")) {
+                const float level = std::clamp(*stored, 0.0f, 1.0f);
+                item->setVolumePercent(level * 100.0);
+            }
+            // The debounce timer OWNS the store: it outlives this scope and
+            // releases it exactly when the window goes away.
+            auto* debounce = new QTimer(root);      // dies with the window
+            debounce->setSingleShot(true);
+            debounce->setInterval(250);
+            QObject::connect(debounce, &QTimer::timeout, &app,
+                             [rt = std::move(runtime), item] {
+                                 if (item)
+                                     rt->putFloat(
+                                         "volume_level",
+                                         static_cast<float>(
+                                             item->volumePercent() / 100.0));
+                             });
+            QObject::connect(item,
+                             &nuvio::mpv::MpvQuickItem::volumePercentChanged,
+                             &app, [debounce] { debounce->start(); });
+        }
+    }
+
 
     // Route seeding: signed-out users land on Welcome; smoke harness and
     // signed-in sessions go straight to their working routes.

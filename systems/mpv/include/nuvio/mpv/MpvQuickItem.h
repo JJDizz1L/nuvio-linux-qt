@@ -29,6 +29,7 @@ class MpvQuickItem : public QQuickFramebufferObject {
     Q_PROPERTY(bool      buffering  READ buffering    NOTIFY bufferingChanged)
     Q_PROPERTY(int       volumePercent READ volumePercent WRITE setVolumePercent NOTIFY volumePercentChanged)
     Q_PROPERTY(QString   hwdecCurrent  READ hwdecCurrent  NOTIFY hwdecCurrentChanged)
+    Q_PROPERTY(double    cacheSeconds  READ cacheSeconds  NOTIFY cacheSecondsChanged)
 
 public:
     explicit MpvQuickItem(QQuickItem* parent = nullptr);
@@ -46,6 +47,7 @@ public:
     [[nodiscard]] bool    buffering()     const;
     [[nodiscard]] int     volumePercent() const;
     [[nodiscard]] QString hwdecCurrent()  const;
+    [[nodiscard]] double  cacheSeconds()  const;
 
     // Called by MpvRenderer (scene-graph thread).
     void reportGlVendorToController(const QString& vendorLower);
@@ -101,6 +103,7 @@ signals:
     void bufferingChanged();
     void volumePercentChanged();
     void hwdecCurrentChanged();
+    void cacheSecondsChanged();
     void doubleClicked();
 
 protected:
