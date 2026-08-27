@@ -102,6 +102,7 @@ Item {
 
         delegate: Rectangle {
             required property var modelData
+            required property int index
             width: ListView.view.width
             height: 64
             color: Theme.surface
@@ -111,6 +112,7 @@ Item {
                 anchors.verticalCenter: parent.verticalCenter
                 x: 12
                 spacing: 2
+                opacity: modelData.enabled === false ? 0.45 : 1
                 Text {
                     text: modelData.name
                     color: Theme.textPrimary
@@ -125,13 +127,26 @@ Item {
                     font.pixelSize: 11
                 }
             }
-            Button {
+            Row {
                 anchors.verticalCenter: parent.verticalCenter
                 anchors.right: parent.right
                 anchors.rightMargin: 12
-                flat: true
-                text: qsTr("Remove")
-                onClicked: addons.remove(modelData.id)
+                spacing: 8
+                Column {
+                    anchors.verticalCenter: parent.verticalCenter
+                    spacing: 0
+                    Switch {
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        checked: modelData.enabled !== false
+                        onToggled: addons.setEnabled(index, checked)
+                    }
+                }
+                Button {
+                    anchors.verticalCenter: parent.verticalCenter
+                    flat: true
+                    text: qsTr("Remove")
+                    onClicked: addons.remove(modelData.id)
+                }
             }
         }
     }
