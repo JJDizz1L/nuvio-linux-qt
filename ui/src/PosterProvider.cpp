@@ -52,11 +52,16 @@ public:
             img.loadFromData(bytes);
             if (img.isNull()) { deliver(makePlaceholder()); return; }
             if (m_want.isValid() && m_want.width() > 0 &&
-                (img.width() > m_want.width() * 2 ||
-                 img.height() > m_want.height() * 2)) {
-                img = img.scaled(
-                    m_want * 2, Qt::KeepAspectRatio,
-                    Qt::SmoothTransformation);
+                img.width() > m_want.width() * 2) {
+                // Derive height from aspect ourselves: a zero-height
+                // requestedSize must NEVER reach scaled() (collapses to a
+                // null image - that was the black-poster bug).
+                const int w        = m_want.width() * 2;
+                const int h        = qMax(1, int(qreal(w) *
+                                           qreal(img.height()) /
+                                           qMax<qreal>(1, img.width())));
+                img = img.scaled(w, h, Qt::KeepAspectRatio,
+                                 Qt::SmoothTransformation);
             }
             m_owner.store(m_url, img);
             deliver(img);
@@ -65,7 +70,7 @@ public:
 
     void deliver(QImage img)
     {
-        m_img = std::move(img);
+                  m_img = std::move(img);
         emit finished();                 // async contract: engine re-queries textureFactory()
     }
 

@@ -114,6 +114,15 @@ Item {
                                 asynchronous: true
                                 source: "image://poster/" + modelData.poster
                             }
+                            // Card click exercises the live resolution
+                            // pipeline: addon endpoints -> policy -> log.
+                            // Actual launch into the player lands with the
+                            // playback-session module (plan §8 P1).
+                            MouseArea {
+                                anchors.fill: parent
+                                onClicked:
+                                    streams.resolve("movie", modelData.id)
+                            }
                             Text {
                                 anchors.bottom: parent.bottom
                                 anchors.horizontalCenter: parent.horizontalCenter

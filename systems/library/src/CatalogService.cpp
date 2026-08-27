@@ -65,10 +65,10 @@ void CatalogService::fetch(const QString& type, const QString& catalogId)
         rep->deleteLater();
         if (rep->error() != QNetworkReply::NoError) {
             m_lastError = rep->errorString();
-            emit catalogReady(type, catalogId, {});
+            ingest(type, catalogId, QByteArrayLiteral("{}"));
             return;
         }
-        handleReply(type, catalogId, rep->readAll());
+        ingest(type, catalogId, rep->readAll());
     });
 }
 
