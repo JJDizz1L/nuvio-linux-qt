@@ -52,8 +52,31 @@ public:
                        std::optional<int> season,
                        std::optional<int> episode);
 
+    // ---- sync envelope (Compose repository-owned bookkeeping) --------------
+    // Compose's WatchProgressRepository owns these values; Qt writes MUST
+    // preserve them (entries-only encodes used to wipe them on every save,
+    // silently breaking cross-line delta sync).
+    struct ProgressEnvelope {
+        long long lastSuccessfulPushEpochMs = 0;
+        long long deltaCursorEventId       = 0;
+        bool      deltaInitialized          = false;
+        std::vector<std::string> dirtyProgressKeys;
+    };
+    [[nodiscard]] ProgressEnvelope loadProgressEnvelope();
+    void markProgressDirty(const std::string& progressKey);
+    void clearProgressDirty(const std::vector<std::string>& keys);
+    void setDeltaCursor(long long eventId, bool initialized);
+    void setLastSuccessfulPush(long long epochMs);
+
+    [[nodiscard]] std::vector<std::string> dirtyWatchedKeys();
+
 private:
         std::string profileKey(const char* base) const;
+
+    StoredProgressPayload loadProgressPayload();
+    void saveProgressPayload(const StoredProgressPayload& p);
+    StoredWatchedPayload loadWatchedPayload();
+    void saveWatchedPayload(const StoredWatchedPayload& p);
 
     int m_profileId = kDefaultProfileId;
     std::unique_ptr<nuvio::settings::PropertiesStore> m_progressStore;

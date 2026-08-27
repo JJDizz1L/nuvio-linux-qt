@@ -152,27 +152,40 @@ static QJsonObject entryToJson(const WatchEntry& e)
     return o;
 }
 
-QString WatchCodec::encodeProgress(const std::vector<WatchEntry>& entries)
+QString WatchCodec::encodeProgressPayload(const StoredProgressPayload& p)
 {
     QJsonObject root;
     QJsonArray arr;
     // (no reserve: QJsonArray lacks it pre-Qt6.3)
-    for (const WatchEntry& e : entries)
+    for (const WatchEntry& e : p.entries)
             arr.append(entryToJson(e));
     root.insert("entries", arr);
-    root.insert("lastSuccessfulPushEpochMs", QJsonValue(0));
-    root.insert("deltaCursorEventId", QJsonValue(0));
-    root.insert("deltaInitialized", false);
-    root.insert("dirtyProgressKeys", QJsonArray());
+    // Sync bookkeeping envelope: the CALLER owns these values — preserving
+    // them across Qt writes is the whole point of this entry point.
+    root.insert("lastSuccessfulPushEpochMs",
+                static_cast<qint64>(p.lastSuccessfulPushEpochMs));
+    root.insert("deltaCursorEventId",
+                static_cast<qint64>(p.deltaCursorEventId));
+    root.insert("deltaInitialized", p.deltaInitialized);
+    QJsonArray dirty;
+    for (const auto& k : p.dirtyProgressKeys) dirty.append(
+        QString::fromStdString(k));
+    root.insert("dirtyProgressKeys", dirty);
     return QJsonDocument(root).toJson(QJsonDocument::Compact);
 }
 
-QString WatchCodec::encodeWatched(const std::vector<WatchedItem>& items)
+QString WatchCodec::encodeProgress(const std::vector<WatchEntry>& entries)
+{
+    StoredProgressPayload p;
+    p.entries = entries;   // zero envelope — legacy entries-only path
+    return encodeProgressPayload(p);
+}
+
+QString WatchCodec::encodeWatchedPayload(const StoredWatchedPayload& p)
 {
     QJsonObject root;
     QJsonArray arr;
-    // (no reserve: QJsonArray lacks it pre-Qt6.3)
-    for (const WatchedItem& w : items) {
+    for (const WatchedItem& w : p.items) {
         QJsonObject o;
         o.insert("type", QString::fromStdString(w.type));
         o.insert("id", QString::fromStdString(w.id));
@@ -186,40 +199,79 @@ QString WatchCodec::encodeWatched(const std::vector<WatchedItem>& items)
         arr.append(o);
     }
     root.insert("items", arr);
-    root.insert("fullyWatchedSeriesKeys", QJsonArray());
-    root.insert("expandedSiblingKeys", QJsonArray());
-    root.insert("lastSuccessfulPushEpochMs", QJsonValue(0));
-    root.insert("deltaCursorEventId", QJsonValue(0));
-    root.insert("deltaInitialized", false);
-    root.insert("dirtyWatchedKeys", QJsonArray());
+    QJsonArray fully, expanded, dirty;
+    for (const auto& k : p.fullyWatchedSeriesKeys)
+        fully.append(QString::fromStdString(k));
+    for (const auto& k : p.expandedSiblingKeys)
+        expanded.append(QString::fromStdString(k));
+    for (const auto& k : p.dirtyWatchedKeys)
+        dirty.append(QString::fromStdString(k));
+    root.insert("fullyWatchedSeriesKeys", fully);
+    root.insert("expandedSiblingKeys", expanded);
+    root.insert("lastSuccessfulPushEpochMs",
+                static_cast<qint64>(p.lastSuccessfulPushEpochMs));
+    root.insert("deltaCursorEventId",
+                static_cast<qint64>(p.deltaCursorEventId));
+    root.insert("deltaInitialized", p.deltaInitialized);
+    root.insert("dirtyWatchedKeys", dirty);
     root.insert("providerPayloads", QJsonObject());
     return QJsonDocument(root).toJson(QJsonDocument::Compact);
 }
 
+QString WatchCodec::encodeWatched(const std::vector<WatchedItem>& items)
+{
+    StoredWatchedPayload p;
+    p.items = items;   // zero envelope — legacy items-only path
+    return encodeWatchedPayload(p);
+}
+
+StoredWatchedPayload WatchCodec::decodeWatchedPayload(const QString& json)
+{
+    StoredWatchedPayload p;
+    if (json.isEmpty()) return p;
+    const QJsonDocument doc = QJsonDocument::fromJson(json.toUtf8());
+    if (!doc.isObject()) return p;
+    const QJsonObject root = doc.object();
+    p.lastSuccessfulPushEpochMs =
+        root.value("lastSuccessfulPushEpochMs").toInteger();
+    p.deltaCursorEventId = root.value("deltaCursorEventId").toInteger();
+    p.deltaInitialized   = root.value("deltaInitialized").toBool(false);
+    const QJsonArray arr = root.value("items").toArray();
+    for (const QJsonValue& v : arr)
+        if (v.isObject()) p.items.push_back(decodeWatchedItem(v.toObject()));
+    const QJsonArray fully = root.value("fullyWatchedSeriesKeys").toArray();
+    for (const QJsonValue& v : fully)
+        if (v.isString())
+            p.fullyWatchedSeriesKeys.push_back(v.toString().toStdString());
+    const QJsonArray expanded = root.value("expandedSiblingKeys").toArray();
+    for (const QJsonValue& v : expanded)
+        if (v.isString())
+            p.expandedSiblingKeys.push_back(v.toString().toStdString());
+    const QJsonArray dirty = root.value("dirtyWatchedKeys").toArray();
+    for (const QJsonValue& v : dirty)
+        if (v.isString())
+            p.dirtyWatchedKeys.push_back(v.toString().toStdString());
+    return p;
+}
+
 std::vector<WatchedItem> WatchCodec::decodeWatched(const QString& json)
 {
-    std::vector<WatchedItem> out;
-    if (json.isEmpty()) return out;
-    const QJsonDocument doc = QJsonDocument::fromJson(json.toUtf8());
-    if (!doc.isObject()) return out;
-    const QJsonArray arr = doc.object().value("items").toArray();
-    // (no reserve)
-    for (const QJsonValue& v : arr) {
-        if (!v.isObject()) continue;
-        const QJsonObject o = v.toObject();
-        WatchedItem w;
-        w.type   = o.value("type").toString().toStdString();
-        w.id     = o.value("id").toString().toStdString();
-        w.name   = o.value("name").toString().toStdString();
-        w.poster = optStr(o, "poster");
-        w.releaseInfo = optStr(o, "releaseInfo");
-        w.season = optInt(o, "season");
-        w.episode = optInt(o, "episode");
-        w.videoId = optStr(o, "videoId");
-        w.markedAtEpochMs = o.value("markedAtEpochMs").toInteger();
-        out.push_back(std::move(w));
-    }
-    return out;
+    return decodeWatchedPayload(json).items;
+}
+
+WatchedItem WatchCodec::decodeWatchedItem(const QJsonObject& o)
+{
+    WatchedItem w;
+    w.type   = o.value("type").toString().toStdString();
+    w.id     = o.value("id").toString().toStdString();
+    w.name   = o.value("name").toString().toStdString();
+    w.poster = optStr(o, "poster");
+    w.releaseInfo = optStr(o, "releaseInfo");
+    w.season = optInt(o, "season");
+    w.episode = optInt(o, "episode");
+    w.videoId = optStr(o, "videoId");
+    w.markedAtEpochMs = o.value("markedAtEpochMs").toInteger();
+    return w;
 }
 
 

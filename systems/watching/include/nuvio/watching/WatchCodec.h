@@ -15,6 +15,7 @@
 //     numbers (epoch millis), floats as numbers.
 
 #include <QString>
+#include <QJsonObject>
 #include <vector>
 
 #include "nuvio/watching/WatchProgress.h"
@@ -28,13 +29,26 @@ public:
     /// returns an empty payload (mirrors Compose's runCatching.getOr).
     static StoredProgressPayload decodeProgress(const QString& json);
 
-        /// Encode entries to the Compose StoredWatchProgressPayload JSON form.
+    /// Encode entries to the Compose StoredWatchProgressPayload JSON form.
     /// lastSuccessfulPush/delta fields are written at their zero/false
     /// defaults (matches WatchProgressCodec.encodeEntries).
     static QString encodeProgress(const std::vector<WatchEntry>& entries);
 
+    /// PREFERRED: full-payload encode — PRESERVES the sync bookkeeping
+    /// envelope (lastSuccessfulPushEpochMs / deltaCursorEventId /
+    /// deltaInitialized / dirtyProgressKeys). The repository owns these; a
+    /// plain entries encode would wipe Compose's sync state on every Qt
+    /// write (latently broke cross-line delta sync before this fix).
+    static QString encodeProgressPayload(const StoredProgressPayload& p);
+
     /// Decode a StoredWatchedPayload -> watched items (Compose derives keys).
     static std::vector<WatchedItem> decodeWatched(const QString& json);
+
+    /// Full-payload watched encode/decode — PRESERVES the sync envelope
+    /// (cursor / deltaInitialized / dirtyWatchedKeys / providerPayloads).
+    static StoredWatchedPayload decodeWatchedPayload(const QString& json);
+    static QString encodeWatchedPayload(const StoredWatchedPayload& p);
+    static WatchedItem decodeWatchedItem(const QJsonObject& o);
 
     /// Encode watched items to the Compose StoredWatchedPayload JSON form.
     static QString encodeWatched(const std::vector<WatchedItem>& items);
