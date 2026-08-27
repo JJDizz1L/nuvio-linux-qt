@@ -65,8 +65,11 @@ Item {
             ComboBox {
                 id: decoderBox
                 width: parent.width * 0.6
-                model: ["auto", "vaapi", "nvdec", "software"]
-                currentIndex: ["auto","vaapi","nvdec","software"]
+                // Compose-parity contract exposes exactly three states
+                // (device / prefer-device share one hwdec chain); explicit
+                // vendor pins (vaapi/nvdec) were dropped in the P4 migration.
+                model: ["auto", "software"]
+                currentIndex: ["auto", "software"]
                     .indexOf(appsettings.decoderMode)
                 onActivated: function(i) {
                     appsettings.decoderMode = model[i]
