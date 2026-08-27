@@ -55,7 +55,7 @@ void SyncOrchestrator::pullNow()
     *con = connect(
         m_client, &SyncRpcClient::finished, this,
         [this, con, profileId](bool ok, int status,
-                               const QJsonDocument& doc) {
+                               const QJsonDocument& doc, QByteArray) {
             disconnect(*con);
             --m_inFlight;
             if (!ok || status != 200) {
@@ -179,7 +179,8 @@ void SyncOrchestrator::doPush()
     auto con = std::make_shared<QMetaObject::Connection>();
     *con = connect(
         m_client, &SyncRpcClient::finished, this,
-        [this, con, payloadSig](bool ok, int, const QJsonDocument&) {
+        [this, con, payloadSig](bool ok, int, const QJsonDocument&,
+                                QByteArray) {
             disconnect(*con);
             --m_inFlight;
             if (ok) m_lastPushSig = payloadSig;

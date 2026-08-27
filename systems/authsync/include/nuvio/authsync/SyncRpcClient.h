@@ -47,9 +47,11 @@ public:
 
 signals:
     /// ok=false carries the HTTP status; response holds the decoded body -
-    /// postgrest functions commonly answer with a JSON ARRAY root, so this
-    /// is the DOCUMENT, not a forced object.
-    void finished(bool ok, int httpStatus, QJsonDocument response);
+    /// postgrest functions commonly answer with a JSON ARRAY root (or a
+    /// BARE SCALAR like the delta-cursor Long, which QJsonDocument cannot
+    /// represent) so rawBody rides along for such cases.
+    void finished(bool ok, int httpStatus, QJsonDocument response,
+                  QByteArray rawBody);
 
 private:
     AuthConfig m_cfg;

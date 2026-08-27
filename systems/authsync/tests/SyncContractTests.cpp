@@ -60,7 +60,7 @@ bool runRpc(SyncRpcClient& client, const QString& fn,
     QObject::connect(&bail, &QTimer::timeout, &loop, &QEventLoop::quit);
     auto con = QObject::connect(
         &client, &SyncRpcClient::finished,
-        [&](bool ok, int status, const QJsonDocument& doc) {
+        [&](bool ok, int status, const QJsonDocument& doc, QByteArray) {
             out->fired = true; out->ok = ok;
             out->status = status; out->doc = doc;
             loop.quit();

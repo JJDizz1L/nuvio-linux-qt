@@ -97,7 +97,7 @@ void pumpUntil(SyncRpcClient& client, bool* done)
     QEventLoop loop;
     QTimer::singleShot(5000, &loop, &QEventLoop::quit);
     QObject::connect(&client, &SyncRpcClient::finished, &loop,
-                     [&](bool, int, const QJsonDocument&) {
+                     [&](bool, int, const QJsonDocument&, QByteArray) {
                          *done = true;
                          loop.quit();
                      });
@@ -125,7 +125,7 @@ int main(int argc, char** argv)
         int statusSeen = 0;
         QJsonObject resp;
         QObject::connect(&client, &SyncRpcClient::finished,
-                         [&](bool ok, int status, const QJsonDocument& doc) {
+                         [&](bool ok, int status, const QJsonDocument& doc, QByteArray) {
                              done = true; okSeen = ok;
                              statusSeen = status;
                              resp = doc.object();
@@ -193,7 +193,7 @@ int main(int argc, char** argv)
         SyncRpcClient client(cfg, [] { return QByteArray("t"); });
         bool done = false, okSeen = true;
         QObject::connect(&client, &SyncRpcClient::finished,
-                         [&](bool ok, int, const QJsonDocument&) { okSeen = ok; });
+                         [&](bool ok, int, const QJsonDocument&, QByteArray) { okSeen = ok; });
         client.call(QStringLiteral("sync_pull_profile_settings_blob"),
                     QJsonObject{});
         pumpUntil(client, &done);

@@ -8,8 +8,15 @@ add_library(nuvio_watching STATIC
     src/WatchCodec.cpp
     include/nuvio/watching/WatchingStore.h
     src/WatchingStore.cpp
+    include/nuvio/watching/ProgressSyncCodec.h
+    src/ProgressSyncCodec.cpp
     include/nuvio/watching/WatchRecorder.h
     src/WatchRecorder.cpp)
+
+add_executable(nuvio_progress_codec_tests tests/ProgressSyncCodecTests.cpp)
+target_link_libraries(nuvio_progress_codec_tests PRIVATE nuvio::watching Qt6::Core)
+nuvio_common_target_props(nuvio_progress_codec_tests)
+add_test(NAME nuvio_progress_codec COMMAND nuvio_progress_codec_tests)
 target_include_directories(nuvio_watching PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_link_libraries(nuvio_watching PUBLIC Qt6::Core nuvio::settings)
 nuvio_common_target_props(nuvio_watching)

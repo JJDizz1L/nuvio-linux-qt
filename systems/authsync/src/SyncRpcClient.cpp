@@ -49,11 +49,11 @@ void SyncRpcClient::call(const QString& fnName, const QJsonObject& params)
             qWarning("SyncRpc: rpc failed (http=%d): %s", status,
                      raw.constData());
             emit finished(false, status, QJsonDocument(QJsonObject{
-                {QStringLiteral("error"), QString::fromUtf8(raw)}}));
+                {QStringLiteral("error"), QString::fromUtf8(raw)}}), raw);
             return;
         }
 
-        emit finished(true, status, QJsonDocument::fromJson(raw));
+        emit finished(true, status, QJsonDocument::fromJson(raw), raw);
     });
 }
 
