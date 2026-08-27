@@ -19,6 +19,7 @@
 #include "bootstrap/SmokeRunner.h"
 #include "Version.h"                    // generated via configure_file
 #include "nuvio/integrations/DiscordRpc.h"
+#include "nuvio/integrations/ScreensaverInhibit.h"
 #include "nuvio/mpv/MpvController.h"
 #include "nuvio/mpv/MpvLog.h"
 #include "nuvio/mpv/MpvQuickItem.h"
@@ -207,6 +208,17 @@ int main(int argc, char* argv[])
         QMetaObject::invokeMethod(discord.get(), "connectNow",
                                   Qt::QueuedConnection);
     }
+
+    // Screensaver inhibit tracks the PLAYING state (parity: acquire on
+    // media+unpaused, release on pause/end/teardown).
+    auto screensaver = std::make_unique<nuvio::integrations::ScreensaverInhibit>();
+    QObject::connect(controller.get(), &nuvio::mpv::MpvController::snapshotChanged,
+                     screensaver.get(), [ss = screensaver.get()](nuvio::mpv::PlaybackSnapshot s) {
+                         if (s.hasMedia() && !s.paused) ss->acquire();
+                         else ss->release();
+                     });
+    QObject::connect(controller.get(), &nuvio::mpv::MpvController::reachedEnd,
+                     screensaver.get(), &nuvio::integrations::ScreensaverInhibit::release);
 
     // Session wiring: library card intent -> resolver outcome -> player
     // route. Owns pending-intent state so stale completions never launch
