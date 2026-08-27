@@ -164,4 +164,105 @@ std::vector<WatchEntry> ProgressSyncCodec::decodeRecords(
     return out;
 }
 
+// ---- watched-items family ----------------------------------------------------
+
+QJsonObject ProgressSyncCodec::watchedItemJson(const WatchedItem& w)
+{
+    QJsonObject o;
+    o.insert("content_id", QString::fromStdString(w.id));
+    o.insert("content_type", QString::fromStdString(w.type));
+    // title has a kotlinx default "" -> always emitted (encodeDefaults).
+    o.insert("title", QString::fromStdString(w.name));
+    if (w.season) o.insert("season", *w.season);
+    else          o.insert("season", QJsonValue::Null);
+    if (w.episode) o.insert("episode", *w.episode);
+    else           o.insert("episode", QJsonValue::Null);
+    o.insert("watched_at", static_cast<qint64>(w.markedAtEpochMs));
+    return o;
+}
+
+QJsonObject ProgressSyncCodec::watchedPushParams(
+    int profileId, const std::vector<WatchedItem>& items,
+    const QString& originClientId)
+{
+    QJsonArray arr;
+    for (const auto& w : items) arr.append(watchedItemJson(w));
+    return QJsonObject{
+        {QStringLiteral("p_profile_id"), profileId},
+        {QStringLiteral("p_items"), arr},
+        {QStringLiteral("p_origin_client_id"), originClientId},
+    };
+}
+
+QJsonObject ProgressSyncCodec::watchedDeleteParams(
+    int profileId, const std::vector<WatchedItem>& items,
+    const QString& originClientId)
+{
+    QJsonArray keys;
+    for (const auto& w : items) {
+        QJsonObject k;
+        k.insert("content_id", QString::fromStdString(w.id));
+        if (w.season) k.insert("season", *w.season);
+        else          k.insert("season", QJsonValue::Null);
+        if (w.episode) k.insert("episode", *w.episode);
+        else           k.insert("episode", QJsonValue::Null);
+        keys.append(k);
+    }
+    return QJsonObject{
+        {QStringLiteral("p_profile_id"), profileId},
+        {QStringLiteral("p_keys"), keys},
+        {QStringLiteral("p_origin_client_id"), originClientId},
+    };
+}
+
+QJsonObject ProgressSyncCodec::watchedPagePullParams(
+    int profileId, int page, int pageSize)
+{
+    return QJsonObject{
+        {QStringLiteral("p_profile_id"), profileId},
+        {QStringLiteral("p_page"), page},
+        {QStringLiteral("p_page_size"), pageSize},
+    };
+}
+
+std::vector<WatchedItem> ProgressSyncCodec::decodeWatchedRecords(
+    const QJsonDocument& doc)
+{
+    std::vector<WatchedItem> out;
+    const QJsonArray rows = doc.isArray() ? doc.array() : QJsonArray();
+    for (const auto& v : rows) {
+        const QJsonObject o = v.toObject();
+        WatchedItem w;
+        w.id     = strOf(o, "content_id");
+        w.type   = strOf(o, "content_type");
+        w.name   = strOf(o, "title");
+        w.season = optIntOf(o, "season");
+        w.episode = optIntOf(o, "episode");
+        w.markedAtEpochMs = int64Of(o, "watched_at");
+        if (!w.id.empty()) out.push_back(std::move(w));
+    }
+    return out;
+}
+
+std::vector<ProgressSyncCodec::WatchedDeltaEvent>
+ProgressSyncCodec::decodeWatchedDeltas(const QJsonDocument& doc)
+{
+    std::vector<WatchedDeltaEvent> out;
+    const QJsonArray rows = doc.isArray() ? doc.array() : QJsonArray();
+    for (const auto& v : rows) {
+        const QJsonObject o = v.toObject();
+        WatchedDeltaEvent d;
+        d.eventId     = int64Of(o, "event_id");
+        d.operation   = strOf(o, "operation");
+        d.contentId   = strOf(o, "content_id");
+        d.contentType = strOf(o, "content_type");
+        d.title       = strOf(o, "title");
+        d.season      = optIntOf(o, "season");
+        d.episode     = optIntOf(o, "episode");
+        d.watchedAt   = int64Of(o, "watched_at");
+        out.push_back(std::move(d));
+    }
+    return out;
+}
+
 } // namespace nuvio::watching

@@ -73,6 +73,16 @@ public:
     void setLastSuccessfulPush(long long epochMs);
 
     [[nodiscard]] std::vector<std::string> dirtyWatchedKeys();
+    void clearWatchedDirtyKeys(const std::vector<std::string>& keys);
+    void setWatchedCursor(long long eventId, bool initialized);
+    [[nodiscard]] long long watchedDeltaCursorEventId();
+    [[nodiscard]] bool watchedDeltaInitialized();
+    /// Remote-merge (no dirty marking) for watched rows.
+    void upsertWatchedRemote(const WatchedItem& item);
+    /// Server-side deletion by content identity (no type in the wire key).
+    void removeWatchedByContentId(const std::string& contentId,
+                                  std::optional<int> season,
+                                  std::optional<int> episode);
 
 private:
         std::string profileKey(const char* base) const;

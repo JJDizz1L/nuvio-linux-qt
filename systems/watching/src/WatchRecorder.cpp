@@ -75,6 +75,7 @@ void WatchRecorder::endSessionCompleted(const qint64 nowEpochMs)
         m_session.season, m_session.episode, nowEpochMs);
     // Drop the resume row — the item is now in the watched set.
     m_store->remove(m_session.resolvedProgressKey());
+    emit watchedChanged();
     m_hasSession = false;
     m_session = WatchEntry{};
     m_lastPersistedPositionMs = -1;

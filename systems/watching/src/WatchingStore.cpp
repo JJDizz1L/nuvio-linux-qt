@@ -113,6 +113,68 @@ std::vector<std::string> WatchingStore::dirtyWatchedKeys()
     return loadWatchedPayload().dirtyWatchedKeys;
 }
 
+void WatchingStore::clearWatchedDirtyKeys(
+    const std::vector<std::string>& keys)
+{
+    auto p = loadWatchedPayload();
+    for (const auto& k : keys)
+        p.dirtyWatchedKeys.erase(
+            std::remove(p.dirtyWatchedKeys.begin(),
+                        p.dirtyWatchedKeys.end(), k),
+            p.dirtyWatchedKeys.end());
+    saveWatchedPayload(p);
+}
+
+void WatchingStore::setWatchedCursor(long long eventId, bool initialized)
+{
+    auto p = loadWatchedPayload();
+    p.deltaCursorEventId = eventId;
+    p.deltaInitialized   = initialized;
+    saveWatchedPayload(p);
+}
+
+long long WatchingStore::watchedDeltaCursorEventId()
+{
+    return loadWatchedPayload().deltaCursorEventId;
+}
+
+bool WatchingStore::watchedDeltaInitialized()
+{
+    return loadWatchedPayload().deltaInitialized;
+}
+
+void WatchingStore::upsertWatchedRemote(const WatchedItem& item)
+{
+    auto p = loadWatchedPayload();
+    const std::string key =
+        buildWatchedKey(item.type, item.id, item.season, item.episode);
+    bool replaced = false;
+    for (auto& w : p.items) {
+        if (buildWatchedKey(w.type, w.id, w.season, w.episode) == key) {
+            w = item;
+            replaced = true;
+            break;
+        }
+    }
+    if (!replaced) p.items.push_back(item);
+    saveWatchedPayload(p);
+}
+
+void WatchingStore::removeWatchedByContentId(
+    const std::string& contentId, std::optional<int> season,
+    std::optional<int> episode)
+{
+    auto p = loadWatchedPayload();
+    p.items.erase(
+        std::remove_if(p.items.begin(), p.items.end(),
+                       [&](const WatchedItem& w) {
+                           return w.id == contentId && w.season == season &&
+                                  w.episode == episode;
+                       }),
+        p.items.end());
+    saveWatchedPayload(p);
+}
+
 std::vector<WatchEntry> WatchingStore::loadEntries()
 {
     const auto raw = m_progressStore->getString(profileKey("watch_progress"));

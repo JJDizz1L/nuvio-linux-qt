@@ -71,6 +71,9 @@ public:
 signals:
     void continueWatchingChanged();
     void resumeChanged();
+    /// Emitted whenever the local watched set gained/lost a row (drives the
+    /// watched-items sync leg).
+    void watchedChanged();
 
 private:
     void rebuildModel();

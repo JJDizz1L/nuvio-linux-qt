@@ -400,6 +400,11 @@ int main(int argc, char* argv[])
                      progressSync.get(),
                      &nuvio::authsync::ProgressSyncController::
                          onLocalProgressChanged);
+    QObject::connect(watchRecorder.get(),
+                     &nuvio::watching::WatchRecorder::watchedChanged,
+                     progressSync.get(),
+                     &nuvio::authsync::ProgressSyncController::
+                         onWatchedChanged);
     {
         // One full/delta pull per session activation (initial + re-login).
         bool initialSyncFired = false;
@@ -411,11 +416,15 @@ int main(int argc, char* argv[])
             [ps, ap = auth.get(), &initialSyncFired] {
                 if (initialSyncFired || !ap->sessionActive()) return;
                 initialSyncFired = true;
-                if (ps) ps->fullSyncThenDeltas();
+                if (ps) {
+                    ps->fullSyncThenDeltas();
+                    ps->fullWatchedSyncThenDeltas();
+                }
             });
         if (auth->sessionActive()) {
             initialSyncFired = true;
             progressSync->fullSyncThenDeltas();
+            progressSync->fullWatchedSyncThenDeltas();
         }
     }
 

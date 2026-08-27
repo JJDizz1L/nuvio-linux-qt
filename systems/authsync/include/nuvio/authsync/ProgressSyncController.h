@@ -48,6 +48,12 @@ public:
     /// Startup sequence: delta/full pull-merge, then push local dirt.
     void fullSyncThenDeltas();
 
+    /// Call whenever the local watched set changed; coalesced separately.
+    void onWatchedChanged();
+    /// Watched analogue: paged full pull / deltas + dirty push.
+    void fullWatchedSyncThenDeltas();
+    void pushWatchedDirty();
+
 signals:
     void pushFinished(bool ok, int ops);
     void pullFinished(bool ok, int applied);
@@ -61,10 +67,12 @@ private:
     TokenProvider m_token;
     SyncRpcClient* m_client = nullptr;
     QTimer m_debounce;
+    QTimer m_watchedDebounce;
 
     int  m_profileId = 1;
     int  m_inFlight  = 0;
     bool m_initialSyncDone = false;
+    bool m_initialWatchedSyncDone = false;
     std::vector<std::string> m_pendingDeletes;
 };
 

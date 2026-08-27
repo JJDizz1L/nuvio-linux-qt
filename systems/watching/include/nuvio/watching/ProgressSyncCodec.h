@@ -59,6 +59,41 @@ public:
     /// QJsonDocument cannot represent — so callers pass the raw body.
     [[nodiscard]] static std::optional<long long> parseCursor(
         const QByteArray& rawBody);
+
+    // ---- watched-items family ----------------------------------------------
+    //   sync_push_watched_items      {p_profile_id, p_items[...],
+    //                                 p_origin_client_id}
+    //     item: {content_id, content_type, title, season, episode, watched_at}
+    //   sync_delete_watched_items    {p_profile_id, p_keys[
+    //                                 {content_id, season, episode}...],
+    //                                 p_origin_client_id}
+    //   sync_pull_watched_items      {p_profile_id, p_page, p_page_size}
+    //   sync_pull_watched_items_delta{p_profile_id, p_since_event_id, p_limit}
+    //     -> [{event_id, operation, content_id, content_type, title,
+    //          season, episode, watched_at}]
+    [[nodiscard]] static QJsonObject watchedItemJson(const WatchedItem& w);
+    [[nodiscard]] static QJsonObject watchedPushParams(
+        int profileId, const std::vector<WatchedItem>& items,
+        const QString& originClientId);
+    [[nodiscard]] static QJsonObject watchedDeleteParams(
+        int profileId, const std::vector<WatchedItem>& items,
+        const QString& originClientId);
+    [[nodiscard]] static QJsonObject watchedPagePullParams(
+        int profileId, int page, int pageSize);
+    [[nodiscard]] static std::vector<WatchedItem> decodeWatchedRecords(
+        const QJsonDocument& doc);
+    struct WatchedDeltaEvent {
+        long long eventId = 0;
+        std::string operation;   // "upsert" | "delete"
+        std::string contentId;
+        std::string contentType;
+        std::string title;
+        std::optional<int> season;
+        std::optional<int> episode;
+        long long watchedAt = 0;
+    };
+    [[nodiscard]] static std::vector<WatchedDeltaEvent> decodeWatchedDeltas(
+        const QJsonDocument& doc);
     [[nodiscard]] static std::vector<DeltaEvent> decodeDeltas(
         const QJsonDocument& doc);
     /// Full-pull rows use the same entry shape as push.
