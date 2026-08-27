@@ -35,6 +35,9 @@ public:
     [[nodiscard]] bool    configured() const { return m_cfg.valid(); }
     [[nodiscard]] bool    sessionActive() const { return m_active; }
     [[nodiscard]] QString userEmail() const { return m_email; }
+    /// Current user JWT (empty when signed out). Consumed by the sync RPC
+    /// client; GoTrue endpoints intentionally keep using the anon key.
+    [[nodiscard]] QByteArray accessToken() const { return m_accessToken; }
 
     // restoreSession(): loads any stored tokens (no network). With an expired
     // access token but valid refresh token it silently re-enters online mode.

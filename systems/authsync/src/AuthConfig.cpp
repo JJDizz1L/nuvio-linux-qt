@@ -62,6 +62,11 @@ QByteArray AuthConfig::refreshUrl() const
 { return baseUrl + "/auth/v1/token?grant_type=refresh_token"; }
 QByteArray AuthConfig::userUrl() const
 { return baseUrl + "/auth/v1/user"; }
+QByteArray AuthConfig::rpcUrl(const char* fn) const
+{
+    return baseUrl + "/rest/v1/rpc/"
+           + (fn ? QByteArray(fn) : QByteArray());
+}
 
 AuthConfig AuthConfig::load()
 {

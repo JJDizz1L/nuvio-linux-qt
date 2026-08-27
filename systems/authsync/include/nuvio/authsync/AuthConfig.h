@@ -27,6 +27,8 @@ struct AuthConfig {
     [[nodiscard]] QByteArray signupUrl() const;   // /auth/v1/signup
     [[nodiscard]] QByteArray refreshUrl() const;  // /auth/v1/token?grant_type=refresh_token
     [[nodiscard]] QByteArray userUrl() const;     // /auth/v1/user
+    /// /rest/v1/rpc/<fn> - postgrest function call endpoint.
+    [[nodiscard]] QByteArray rpcUrl(const char* fn) const;
 
     static AuthConfig load();
 };
