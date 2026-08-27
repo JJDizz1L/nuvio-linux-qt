@@ -43,6 +43,10 @@ public:
     QByteArray cursorReply = "1234";
     QByteArray pullReply   = "[]";
     QByteArray deltaReply  = "[]";
+    // Sequential pages for watched full-pull; empty -> fall back to pullReply.
+    QList<QByteArray> pullPages;
+    // Sequential pages served for watched full-pull requests (FIFO).
+    QList<QByteArray> watchedPages;
 
     bool start()
     {
@@ -86,12 +90,18 @@ private:
         bodies << m_buf[sock].mid(hdrEnd + 4);
 
         QByteArray payload = "{}";
-        if (path.endsWith("sync_pull_watch_progress_delta"))
+        if (path.endsWith("sync_pull_watched_items_delta"))
             payload = deltaReply;
-        else if (path.endsWith("sync_pull_watch_progress"))
-            payload = pullReply;
+        else if (path.endsWith("sync_pull_watched_items"))
+            payload = pullPages.isEmpty()
+                          ? pullReply
+                          : pullPages.takeFirst();
+        else if (path.endsWith("sync_get_watched_items_delta_cursor"))
+            payload = cursorReply;
         else if (path.endsWith("sync_get_watch_progress_delta_cursor"))
             payload = cursorReply;
+        else if (path.endsWith("sync_pull_watch_progress"))
+            payload = pullReply;
         QByteArray out =
             "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n"
             "Connection: close\r\nContent-Length: ";
@@ -220,6 +230,51 @@ int main(int argc, char** argv)
         const auto env = after.loadProgressEnvelope();
         CHECK(env.deltaCursorEventId == 1234 && env.deltaInitialized,
               "cursor seeded + initialized");
+    }
+
+    { // T3b: watched full-pull PAGINATION (2 pages via tiny page size)
+        rpc.deltaReply = "[]";
+        // page1: 2 full rows; page2: 1 row (short page ends the loop)
+        rpc.pullPages.clear();
+        QJsonArray p1;
+        for (int i = 0; i < 2; ++i)
+            p1.append(QJsonObject{
+                {QStringLiteral("content_id"),
+                 QStringLiteral("ttW%1").arg(i)},
+                {QStringLiteral("content_type"), QStringLiteral("movie")},
+                {QStringLiteral("title"), QStringLiteral("W%1").arg(i)},
+                {QStringLiteral("season"), QJsonValue::Null},
+                {QStringLiteral("episode"), QJsonValue::Null},
+                {QStringLiteral("watched_at"), 100.0 + i},
+                {QStringLiteral("sort_order"), i}});
+        QJsonArray p2;
+        p2.append(QJsonObject{
+            {QStringLiteral("content_id"), QStringLiteral("ttW9")},
+            {QStringLiteral("content_type"), QStringLiteral("movie")},
+            {QStringLiteral("title"), QStringLiteral("W9")},
+            {QStringLiteral("season"), QJsonValue::Null},
+            {QStringLiteral("episode"), QJsonValue::Null},
+            {QStringLiteral("watched_at"), 300.0},
+            {QStringLiteral("sort_order"), 2}});
+        rpc.pullPages << QJsonDocument(p1).toJson(QJsonDocument::Compact)
+                      << QJsonDocument(p2).toJson(QJsonDocument::Compact);
+
+        ProgressSyncController pc(cfg,
+                                  [] { return QByteArray("jwt"); }, 1);
+        pc.setWatchedPageSize(2);   // 2 rows per page -> 2 fetches
+        int wApplied = -1;
+        QObject::connect(&pc, &ProgressSyncController::pullFinished,
+                         [&](bool, int a) { wApplied = a; });
+        pc.fullWatchedSyncThenDeltas();
+        pump(300);
+
+        CHECK(wApplied == 3, "watched pages accumulated (2+1)");
+        WatchingStore wAfter(1);
+        CHECK(wAfter.loadWatchedItems().size() >= 3,
+              "watched rows persisted");
+        CHECK(wAfter.watchedDeltaCursorEventId() == 1234 &&
+              wAfter.watchedDeltaInitialized(),
+              "watched cursor seeded + initialized");
     }
 
     { // T4: signed-out orchestrator is a no-op

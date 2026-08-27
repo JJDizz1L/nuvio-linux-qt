@@ -26,6 +26,7 @@
 
 #include "nuvio/authsync/AuthConfig.h"
 #include "nuvio/authsync/SyncRpcClient.h"
+#include "nuvio/watching/WatchProgress.h"
 
 namespace nuvio::authsync {
 
@@ -40,6 +41,8 @@ public:
     ~ProgressSyncController() override;
 
     void setDebounceMs(int ms) { m_debounce.setInterval(ms); }
+    /// Test hook: shrink the watched full-pull page size.
+    void setWatchedPageSize(int n) { m_watchPageSize = n; }
 
     /// Call whenever local progress changed (recorder signals); coalesced.
     void onLocalProgressChanged();
@@ -60,6 +63,8 @@ signals:
 
 private:
     void runDeleteLeg(const std::vector<std::string>& keys);
+    void fetchWatchedPage(int page);
+    void finishWatchedInitialMerge();
     [[nodiscard]] bool signedIn() const { return !m_token().isEmpty(); }
     [[nodiscard]] QString originId();
 
@@ -71,9 +76,11 @@ private:
 
     int  m_profileId = 1;
     int  m_inFlight  = 0;
+    int  m_watchPageSize = 200;
     bool m_initialSyncDone = false;
     bool m_initialWatchedSyncDone = false;
     std::vector<std::string> m_pendingDeletes;
+    std::vector<nuvio::watching::WatchedItem> m_watchAccum;
 };
 
 } // namespace nuvio::authsync

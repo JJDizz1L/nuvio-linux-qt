@@ -386,77 +386,127 @@ void ProgressSyncController::fullWatchedSyncThenDeltas()
     const bool watchedInit = store.watchedDeltaInitialized();
 
     ++m_inFlight;
+
+    // ---- INITIAL: paged full pull, then merge + cursor seed ---------------
+    if (!watchedInit) {
+        m_watchAccum.clear();
+        fetchWatchedPage(1);
+        return;   // chain completes in finishWatchedInitialMerge()
+    }
+
+    // ---- DELTA since stored cursor ----------------------------------------
     auto con = std::make_shared<QMetaObject::Connection>();
     *con = connect(m_client, &SyncRpcClient::finished, this,
-                   [this, con, watchedInit](bool ok, int status,
-                                            const QJsonDocument& doc,
-                                            QByteArray) {
+                   [this, con](bool ok, int status, const QJsonDocument& doc,
+                               QByteArray) {
         disconnect(*con);
         --m_inFlight;
         int applied = 0;
         if (ok && status == 200) {
             nuvio::watching::WatchingStore fresh(m_profileId);
-            if (!watchedInit) {
-                for (const auto& w :
-                     nuvio::watching::ProgressSyncCodec::
-                         decodeWatchedRecords(doc)) {
-                    const auto items = fresh.loadWatchedItems();
-                    bool newer = true;
-                    for (const auto& l : items)
-                        if (nuvio::watching::buildWatchedKey(
-                                l.type, l.id, l.season, l.episode) ==
-                            nuvio::watching::buildWatchedKey(
-                                w.type, w.id, w.season, w.episode)) {
-                            newer = w.markedAtEpochMs > l.markedAtEpochMs;
-                            break;
-                        }
-                    if (newer) { fresh.upsertWatchedRemote(w); ++applied; }
+            long long maxEvent = 0;
+            for (const auto& d : nuvio::watching::ProgressSyncCodec::
+                                   decodeWatchedDeltas(doc)) {
+                maxEvent = std::max(maxEvent, d.eventId);
+                if (d.operation == "delete") {
+                    fresh.removeWatchedByContentId(d.contentId, d.season,
+                                                   d.episode);
+                    ++applied;
+                    continue;
                 }
-            } else {
-                long long maxEvent = 0;
-                for (const auto& d :
-                     nuvio::watching::ProgressSyncCodec::
-                         decodeWatchedDeltas(doc)) {
-                    maxEvent = std::max(maxEvent, d.eventId);
-                    if (d.operation == "delete") {
-                        fresh.removeWatchedByContentId(d.contentId, d.season,
-                                                       d.episode);
-                        ++applied;
-                        continue;
+                nuvio::watching::WatchedItem w;
+                w.id     = d.contentId;
+                w.type   = d.contentType;
+                w.name   = d.title;
+                w.season = d.season;
+                w.episode = d.episode;
+                w.markedAtEpochMs = d.watchedAt;
+                const auto items = fresh.loadWatchedItems();
+                bool newer = true;
+                for (const auto& l : items)
+                    if (nuvio::watching::buildWatchedKey(
+                            l.type, l.id, l.season, l.episode) ==
+                        nuvio::watching::buildWatchedKey(
+                            w.type, w.id, w.season, w.episode)) {
+                        newer = d.watchedAt > l.markedAtEpochMs;
+                        break;
                     }
-                    nuvio::watching::WatchedItem w;
-                    w.id     = d.contentId;
-                    w.type   = d.contentType;
-                    w.name   = d.title;
-                    w.season = d.season;
-                    w.episode = d.episode;
-                    w.markedAtEpochMs = d.watchedAt;
-                    const auto items = fresh.loadWatchedItems();
-                    bool newer = true;
-                    for (const auto& l : items)
-                        if (nuvio::watching::buildWatchedKey(
-                                l.type, l.id, l.season, l.episode) ==
-                            nuvio::watching::buildWatchedKey(
-                                w.type, w.id, w.season, w.episode)) {
-                            newer = d.watchedAt > l.markedAtEpochMs;
-                            break;
-                        }
-                    if (newer) { fresh.upsertWatchedRemote(w); ++applied; }
-                }
-                if (maxEvent > 0) fresh.setWatchedCursor(maxEvent, true);
+                if (newer) { fresh.upsertWatchedRemote(w); ++applied; }
             }
+            if (maxEvent > 0) fresh.setWatchedCursor(maxEvent, true);
         }
         emit pullFinished(ok, applied);
     });
+    m_client->call(QStringLiteral("sync_pull_watched_items_delta"),
+                   nuvio::watching::ProgressSyncCodec::deltaPullParams(
+                       m_profileId, watchedCursor, 200));
+}
 
-    if (!watchedInit)
-        m_client->call(QStringLiteral("sync_pull_watched_items"),
-                       nuvio::watching::ProgressSyncCodec::
-                           watchedPagePullParams(m_profileId, 1, 200));
-    else
-        m_client->call(QStringLiteral("sync_pull_watched_items_delta"),
-                       nuvio::watching::ProgressSyncCodec::deltaPullParams(
-                           m_profileId, watchedCursor, 200));
+void ProgressSyncController::fetchWatchedPage(int page)
+{
+    auto con = std::make_shared<QMetaObject::Connection>();
+    *con = connect(m_client, &SyncRpcClient::finished, this,
+                   [this, con, page](bool ok, int status,
+                                     const QJsonDocument& doc, QByteArray) {
+        disconnect(*con);
+        if (!ok || status != 200) {
+            --m_inFlight;
+            m_watchAccum.clear();
+            emit pullFinished(false, 0);
+            return;
+        }
+        const auto rows =
+            nuvio::watching::ProgressSyncCodec::decodeWatchedRecords(doc);
+        for (const auto& w : rows) m_watchAccum.push_back(w);
+        const bool lastPage =
+            static_cast<int>(rows.size()) < m_watchPageSize;
+        if (!lastPage) { fetchWatchedPage(page + 1); return; }
+        finishWatchedInitialMerge();
+    });
+    m_client->call(QStringLiteral("sync_pull_watched_items"),
+                   nuvio::watching::ProgressSyncCodec::watchedPagePullParams(
+                       m_profileId, page, m_watchPageSize));
+}
+
+void ProgressSyncController::finishWatchedInitialMerge()
+{
+    // Merge accumulated pages newest-wins-remote (no dirty marks).
+    nuvio::watching::WatchingStore fresh(m_profileId);
+    int applied = 0;
+    for (const auto& w : m_watchAccum) {
+        const auto items = fresh.loadWatchedItems();
+        bool newer = true;
+        for (const auto& l : items)
+            if (nuvio::watching::buildWatchedKey(
+                    l.type, l.id, l.season, l.episode) ==
+                nuvio::watching::buildWatchedKey(
+                    w.type, w.id, w.season, w.episode)) {
+                newer = w.markedAtEpochMs > l.markedAtEpochMs;
+                break;
+            }
+        if (newer) { fresh.upsertWatchedRemote(w); ++applied; }
+    }
+    m_watchAccum.clear();
+
+    // Seed the watched cursor while still holding the in-flight slot.
+    auto ccon = std::make_shared<QMetaObject::Connection>();
+    *ccon = connect(m_client, &SyncRpcClient::finished, this,
+                    [this, ccon, applied](bool ok2, int st2,
+                            const QJsonDocument&, QByteArray raw2) {
+        disconnect(*ccon);
+        --m_inFlight;
+        if (ok2 && st2 == 200) {
+            if (const auto c =
+                    nuvio::watching::ProgressSyncCodec::parseCursor(raw2)) {
+                nuvio::watching::WatchingStore f(m_profileId);
+                f.setWatchedCursor(*c, true);
+            }
+        }
+        emit pullFinished(ok2, applied);
+    });
+    m_client->call(QStringLiteral("sync_get_watched_items_delta_cursor"),
+                   nuvio::watching::ProgressSyncCodec::cursorParams(
+                       m_profileId));
 }
 
 } // namespace nuvio::authsync
