@@ -364,6 +364,101 @@ void AppSettings::setHoverPreviewDelayMs(int v)
     emit hoverPreviewChanged();
 }
 
+// ---- stream autoplay (Compose StreamAutoPlayMode/Source parity) -------------
+
+namespace {
+const char* const kAutoPlayModes[] = {"MANUAL", "FIRST_STREAM",
+                                      "REGEX_MATCH"};
+const char* const kAutoPlaySources[] = {"ALL_SOURCES",
+                                        "INSTALLED_ADDONS_ONLY"};
+const int kAutoPlayTimeouts[] = {0, 1, 2, 3, 4, 5,
+                                 6, 7, 8, 9, 10, 15, 20, 25, 30};
+
+[[nodiscard]] bool oneOf(const QString& v, const char* const* list, int n)
+{
+    for (int i = 0; i < n; ++i)
+        if (v == QLatin1String(list[i])) return true;
+    return false;
+}
+
+[[nodiscard]] int snapTimeout(int v)
+{
+    int best = 0;
+    int bestDist = -1;
+    for (int allowed : kAutoPlayTimeouts) {
+        const int d = std::abs(allowed - v);
+        if (bestDist < 0 || d < bestDist) {
+            best = allowed;
+            bestDist = d;
+        }
+    }
+    return best;
+}
+} // namespace
+
+QString AppSettings::streamAutoPlayMode() const
+{
+    const auto raw = m_store->player.getString(
+        profileScoped("stream_auto_play_mode"));
+    if (!raw) return QStringLiteral("MANUAL");
+    const QString v = QString::fromStdString(*raw);
+    return oneOf(v, kAutoPlayModes, 3) ? v : QStringLiteral("MANUAL");
+}
+
+void AppSettings::setStreamAutoPlayMode(const QString& v)
+{
+    if (!oneOf(v, kAutoPlayModes, 3) || streamAutoPlayMode() == v) return;
+    m_store->player.putString(profileScoped("stream_auto_play_mode"),
+                              v.toStdString());
+    emit streamAutoPlayChanged();
+}
+
+QString AppSettings::streamAutoPlaySource() const
+{
+    const auto raw = m_store->player.getString(
+        profileScoped("stream_auto_play_source"));
+    if (!raw) return QStringLiteral("ALL_SOURCES");
+    const QString v = QString::fromStdString(*raw);
+    return oneOf(v, kAutoPlaySources, 2) ? v : QStringLiteral("ALL_SOURCES");
+}
+
+void AppSettings::setStreamAutoPlaySource(const QString& v)
+{
+    if (!oneOf(v, kAutoPlaySources, 2) || streamAutoPlaySource() == v) return;
+    m_store->player.putString(profileScoped("stream_auto_play_source"),
+                              v.toStdString());
+    emit streamAutoPlayChanged();
+}
+
+int AppSettings::streamAutoPlayTimeoutSeconds() const
+{
+    return m_store->player.getInt(
+        profileScoped("stream_auto_play_timeout_seconds")).value_or(3);
+}
+
+void AppSettings::setStreamAutoPlayTimeoutSeconds(int v)
+{
+    const int snapped = snapTimeout(v);
+    if (streamAutoPlayTimeoutSeconds() == snapped) return;
+    m_store->player.putInt(profileScoped("stream_auto_play_timeout_seconds"),
+                           snapped);
+    emit streamAutoPlayChanged();
+}
+
+QString AppSettings::streamAutoPlayRegex() const
+{
+    return QString::fromStdString(m_store->player.getString(
+        profileScoped("stream_auto_play_regex")).value_or(""));
+}
+
+void AppSettings::setStreamAutoPlayRegex(const QString& v)
+{
+    if (streamAutoPlayRegex() == v) return;
+    m_store->player.putString(profileScoped("stream_auto_play_regex"),
+                              v.toStdString());
+    emit streamAutoPlayChanged();
+}
+
 int AppSettings::subtitleFontSize() const
 {
     const auto raw = m_store->player.getInt(

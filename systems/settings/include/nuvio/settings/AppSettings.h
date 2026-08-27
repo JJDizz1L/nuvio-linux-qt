@@ -51,6 +51,18 @@ class AppSettings final : public QObject {
     Q_PROPERTY(int hoverPreviewDelayMs READ hoverPreviewDelayMs WRITE
                    setHoverPreviewDelayMs NOTIFY hoverPreviewChanged)
 
+    // Stream autoplay (Compose StreamAutoPlayMode/Source enum-name strings).
+    Q_PROPERTY(QString streamAutoPlayMode READ streamAutoPlayMode WRITE
+                   setStreamAutoPlayMode NOTIFY streamAutoPlayChanged)
+    Q_PROPERTY(QString streamAutoPlaySource READ streamAutoPlaySource WRITE
+                   setStreamAutoPlaySource NOTIFY streamAutoPlayChanged)
+    Q_PROPERTY(int streamAutoPlayTimeoutSeconds READ
+                   streamAutoPlayTimeoutSeconds WRITE
+                       setStreamAutoPlayTimeoutSeconds NOTIFY
+                           streamAutoPlayChanged)
+    Q_PROPERTY(QString streamAutoPlayRegex READ streamAutoPlayRegex WRITE
+                   setStreamAutoPlayRegex NOTIFY streamAutoPlayChanged)
+
 public:
     explicit AppSettings(QObject* parent = nullptr);
 
@@ -96,6 +108,15 @@ public:
     void                  setHoverPreviewEnabled(bool v);
     [[nodiscard]] int     hoverPreviewDelayMs() const;
     void                  setHoverPreviewDelayMs(int v);
+    // Stream autoplay (enum-name strings, Compose defaults).
+    [[nodiscard]] QString streamAutoPlayMode() const;
+    void                  setStreamAutoPlayMode(const QString& v);
+    [[nodiscard]] QString streamAutoPlaySource() const;
+    void                  setStreamAutoPlaySource(const QString& v);
+    [[nodiscard]] int     streamAutoPlayTimeoutSeconds() const;
+    void                  setStreamAutoPlayTimeoutSeconds(int v);
+    [[nodiscard]] QString streamAutoPlayRegex() const;
+    void                  setStreamAutoPlayRegex(const QString& v);
 
     /// --- remote-profile-sync surface (leg 4) ---------------------------------
     /// Current player-settings feature payload (Compose blob v3 fragment).
@@ -110,6 +131,7 @@ signals:
     void darkThemeChanged();
     void subtitleStyleChanged();
     void hoverPreviewChanged();
+    void streamAutoPlayChanged();
     void decoderModeChanged();
     void cacheMbChanged();
     void torrentCacheSizeChanged();

@@ -256,6 +256,84 @@ Item {
             }
         }
 
+        // ---- playback: stream autoplay ------------------------------------------
+        Column {
+            width: parent.width
+            spacing: 4
+            Text {
+                text: qsTr("Stream autoplay")
+                color: Theme.textPrimary
+                font.pixelSize: 15
+            }
+            Row {
+                width: parent.width
+                spacing: Theme.spacingSm
+                ComboBox {
+                    width: parent.width * 0.55
+                    textRole: "label"
+                    model: [
+                        { label: qsTr("Manual"), value: "MANUAL" },
+                        { label: qsTr("First stream"), value: "FIRST_STREAM" },
+                        { label: qsTr("Regex match"), value: "REGEX_MATCH" }
+                    ]
+                    currentIndex:
+                        ["MANUAL", "FIRST_STREAM", "REGEX_MATCH"]
+                            .indexOf(appsettings.streamAutoPlayMode)
+                    onActivated: function(i) {
+                        appsettings.streamAutoPlayMode = model[i].value
+                    }
+                }
+                ComboBox {
+                    width: parent.width * 0.45 - parent.spacing
+                    textRole: "label"
+                    model: [
+                        { label: qsTr("All sources"), value: "ALL_SOURCES" },
+                        { label: qsTr("Addons only"),
+                          value: "INSTALLED_ADDONS_ONLY" }
+                    ]
+                    currentIndex:
+                        ["ALL_SOURCES", "INSTALLED_ADDONS_ONLY"]
+                            .indexOf(appsettings.streamAutoPlaySource)
+                    onActivated: function(i) {
+                        appsettings.streamAutoPlaySource = model[i].value
+                    }
+                }
+            }
+            Row {
+                width: parent.width
+                spacing: Theme.spacingSm
+                Text {
+                    text: qsTr("Timeout")
+                    color: Theme.textSecondary
+                    font.pixelSize: 13
+                    anchors.verticalCenter: parent.verticalCenter
+                }
+                ComboBox {
+                    id: timeoutBox
+                    model: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 20, 25, 30]
+                    currentIndex:
+                        model.indexOf(appsettings.streamAutoPlayTimeoutSeconds)
+                    onActivated: function(i) {
+                        appsettings.streamAutoPlayTimeoutSeconds = model[i]
+                    }
+                }
+                Text {
+                    text: qsTr("Regex")
+                    color: Theme.textSecondary
+                    font.pixelSize: 13
+                    anchors.verticalCenter: parent.verticalCenter
+                }
+                TextField {
+                    id: regexField
+                    width: 220
+                    text: appsettings.streamAutoPlayRegex
+                    selectByMouse: true
+                    onEditingFinished:
+                        appsettings.streamAutoPlayRegex = text
+                }
+            }
+        }
+
         // ---- playback: track languages ------------------------------------------
         Column {
             width: parent.width

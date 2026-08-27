@@ -43,6 +43,19 @@ Item {
     function playMovie() {
         playback.requestPlay(type, imdbId, cur.name || "")
     }
+
+    // Stream autoplay (Compose parity): when mode != MANUAL, opening a MOVIE
+    // detail page starts playback without the Play click. Series keep manual
+    // episode selection (auto-play-next handles continuation later).
+    readonly property bool autoPlayMovies:
+        appsettings.streamAutoPlayMode !== "MANUAL"
+    function maybeAutoPlayMovie() {
+        // Hover previews also mutate meta.current while this page is hidden;
+        // auto-play must only fire when the detail route is actually shown.
+        if (!visible || !autoPlayMovies || isSeries) return
+        if ((cur.id || "").length === 0 || meta.loading) return
+        playMovie()
+    }
     function playEpisode(ep) {
         playback.requestPlay(type,
                              imdbId + ":" + ep.season + ":" + ep.episode,
@@ -85,7 +98,7 @@ Item {
             heroController.enqueueCommand(["stop"])
     }
     onVisibleChanged: visible ? maybeStartHero() : stopHero()
-    onCurChanged: maybeStartHero()
+    onCurChanged: { maybeStartHero(); maybeAutoPlayMovie() }
     Component.onCompleted: maybeStartHero()
     Connections {
         target: trailer
