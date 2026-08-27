@@ -75,6 +75,8 @@ public:
     std::atomic<int>    m_dbgDurRc{-2};     ///< mpv_get_property("duration") rc
     std::atomic<int>    m_dbgPauseFlag{-1}; ///< observed pause flag (-1 unset)
     std::atomic<int>    m_dbgIdleActive{-1};
+    std::atomic<int>    m_dbgPubs{0};       ///< successful snapshotChanged emits
+    std::atomic<long long> m_dbgTpValX100{-99999}; ///< last raw time-pos*100
 
 signals:
     void ready(bool ok, QString error);

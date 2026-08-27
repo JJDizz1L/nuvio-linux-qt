@@ -330,6 +330,7 @@ void MpvController::threadMain()
             bool dirty = false;
             int rc = mpv_get_property(m_handle, "time-pos", MPV_FORMAT_DOUBLE, &v);
             m_dbgTpRc.store(rc, std::memory_order_relaxed);
+            m_dbgTpValX100.store(llround(v * 100.0), std::memory_order_relaxed);
             if (rc >= 0 && v >= 0) {
                 std::lock_guard<std::mutex> g(m_snapMutex);
                 if (m_snapshot.positionSec != v) { m_snapshot.positionSec = v; dirty = true; }
@@ -548,6 +549,9 @@ void MpvController::processEvent(mpv_event* ev)
 
         if (dirty) {
             {   std::lock_guard<std::mutex> g(m_snapMutex); m_snapshot = s; }
+            // Publish here too: FILE_LOADED alone proved insufficient to
+            // resume streaming once early deliveries coalesced away.
+            publishSnapshotPlayback();
         }
         break;
     }
@@ -566,19 +570,22 @@ QString MpvController::debugCoreState()
         cachedPos = m_snapshot.positionSec;
         cachedDur = m_snapshot.durationSec;
     }
+    const int loaded =
+        [&] {
+             std::lock_guard<std::mutex> g(m_snapMutex);
+             return m_snapshot.fileLoaded ? 1 : 0;
+         }();
     return QStringLiteral(
-               "tpRc=%1 durRc=%2 pause=%3 idle=%4 | cachePos=%5 cacheDur=%6 "
-               "| fileLoaded=%7")
+               "tpV=%8 tpRc=%1 durRc=%2 pause=%3 idle=%4 | cachePos=%5 cacheDur=%6 "
+               "| fileLoaded=%7 pubs=%8")
         .arg(m_dbgTpRc.load())
         .arg(m_dbgDurRc.load())
         .arg(m_dbgPauseFlag.load())
         .arg(m_dbgIdleActive.load())
         .arg(cachedPos, 0, 'f', 2)
         .arg(cachedDur, 0, 'f', 2)
-        .arg([&] {
-             std::lock_guard<std::mutex> g(m_snapMutex);
-             return m_snapshot.fileLoaded ? 1 : 0;
-         }());
+        .arg(loaded)
+        .arg(m_dbgPubs.load()).arg(m_dbgTpValX100.load());
 }
 
 void MpvController::publishSnapshotPlayback()
@@ -588,6 +595,7 @@ void MpvController::publishSnapshotPlayback()
         return;                       // coalesced; urgent paths emit directly
     m_lastPublishMs = now;
     emit snapshotChanged(snapshot());
+    m_dbgPubs.fetch_add(1, std::memory_order_relaxed);
 }
 
 } // namespace nuvio::mpv
