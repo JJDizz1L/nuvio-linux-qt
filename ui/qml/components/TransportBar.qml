@@ -23,7 +23,7 @@ Rectangle {
             flat: true
             enabled: bar.mpv.hasMedia
             contentItem: Text {
-                text: bar.mpv.paused ? "\u23F5" : "\u23F8"   // ▶ ❚❚
+                text: bar.mpv.paused ? qsTr("Play") : qsTr("Pause")   // ▶ ❚❚
                 color: enabled ? Theme.textPrimary : Theme.textDisabled
                 font.pixelSize: 18
                 horizontalAlignment: Text.AlignHCenter
@@ -75,7 +75,7 @@ Rectangle {
         Button {
             flat: true
             contentItem: Text {
-                text: "\u26F6"                               // ⛶ fullscreen
+                text: qsTr("Full")                               // ⛶ fullscreen
                 color: Theme.textPrimary
                 font.pixelSize: 16
                 horizontalAlignment: Text.AlignHCenter
