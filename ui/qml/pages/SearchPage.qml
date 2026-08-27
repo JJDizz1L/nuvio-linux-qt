@@ -210,6 +210,26 @@ Item {
                                         source: "image://poster/" +
                                                 modelData.poster
                                     }
+                                    // Watched badge (shared Compose store):
+                                    // same movie-level check as the library
+                                    // cards.
+                                    Rectangle {
+                                        visible: watching.isWatched(
+                                                     sectionCol.modelData.type,
+                                                     modelData.id)
+                                        anchors.top: parent.top
+                                        anchors.right: parent.right
+                                        anchors.margins: 6
+                                        width: 22; height: 22
+                                        radius: 11
+                                        color: Theme.chromeScrim
+                                        Text {
+                                            anchors.centerIn: parent
+                                            text: "\u2713"
+                                            color: Theme.accent
+                                            font.pixelSize: 13
+                                        }
+                                    }
                                     MouseArea {
                                         anchors.fill: parent
                                         onClicked: {
