@@ -37,10 +37,10 @@ int main(int argc, char* argv[])
     QGuiApplication::setApplicationName(QStringLiteral("nuvio-linux"));
     QGuiApplication::setApplicationVersion(QStringLiteral(NUVIO_VERSION_STRING));
     QGuiApplication::setOrganizationDomain(QStringLiteral("io.github.jdizz1l"));
-    // Stable compositor identity (plan W1): one app_id for dev AND packaged
-    // runs; the desktop file may be absent locally — harmless no-op then.
-    QGuiApplication::setDesktopFileName(
-        QStringLiteral("io.github.jjdizz1l.NuvioLinux"));
+    // Wayland app_id / Hyprland class = package name (nuvio-linux),
+    // identical dev vs packaged by construction. Matches omarchy video_class
+    // lua rules once extended with this literal.
+    QGuiApplication::setDesktopFileName(QStringLiteral("nuvio-linux"));
 
     nuvio::mpv::applyMpvDebugEnv();
 
