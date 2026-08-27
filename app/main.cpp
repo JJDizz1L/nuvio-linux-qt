@@ -98,7 +98,8 @@ int main(int argc, char* argv[])
     auto auth       = std::make_unique<nuvio::authsync::AuthService>();
     auto settings   = std::make_unique<nuvio::settings::AppSettings>();
     auto catalog    = std::make_unique<nuvio::library::CatalogService>();
-    auth->restoreSession();     // stored tokens -> active or silent refresh
+    auth->restoreSession();
+    catalog->loadShelves();     // stored tokens -> active or silent refresh
 
     QQmlApplicationEngine engine;
     QObject::connect(&engine, &QQmlEngine::quit,

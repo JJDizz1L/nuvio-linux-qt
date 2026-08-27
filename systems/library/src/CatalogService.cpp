@@ -7,6 +7,8 @@
 #include <QNetworkReply>
 #include <QNetworkRequest>
 #include <QUrl>
+#include <cstdio>
+#include <utility>
 
 namespace nuvio::library {
 namespace {
@@ -70,22 +72,66 @@ void CatalogService::fetch(const QString& type, const QString& catalogId)
     });
 }
 
-void CatalogService::handleReply(const QString& type,
-                                 const QString& catalogId,
-                                 const QByteArray& body)
+QString CatalogService::shelfTitle(const QString& type,
+                                   const QString& catalogId)
+{
+    const QString key = type + QLatin1Char('/') + catalogId;
+    if (key == QLatin1String("movie/top"))  return QStringLiteral("Popular Movies");
+    if (key == QLatin1String("series/top")) return QStringLiteral("Popular Series");
+    if (key == QLatin1String("anime/top"))  return QStringLiteral("Anime");
+    return type + QLatin1Char(' ') + catalogId;
+}
+
+QVariantMap CatalogService::newShelf(const QString& type,
+                                     const QString& catalogId)
+{
+    QVariantMap s;
+    s.insert(QStringLiteral("type"),      type);
+    s.insert(QStringLiteral("catalogId"), catalogId);
+    s.insert(QStringLiteral("title"),     shelfTitle(type, catalogId));
+    s.insert(QStringLiteral("items"),     QVariantList{});
+    s.insert(QStringLiteral("loading"),   true);
+    return s;
+}
+
+int CatalogService::indexOfShelf(const QString& type,
+                                 const QString& catalogId) const
+{
+    for (int i = 0; i < m_shelves.size(); ++i) {
+        const auto s = m_shelves[i].toMap();
+        if (s.value("type") == type && s.value("catalogId") == catalogId)
+            return i;
+    }
+    return -1;
+}
+
+void CatalogService::loadShelves()
+{
+    m_shelves.clear();
+    m_order.clear();
+    using P = std::pair<QString, QString>;
+    const P defs[] = {{QStringLiteral("movie"),  QStringLiteral("top")},
+                      {QStringLiteral("series"), QStringLiteral("top")},
+                      {QStringLiteral("anime"),  QStringLiteral("top")}};
+    for (const auto& [t, cid] : defs) {
+        m_order << t + QLatin1Char('/') + cid;
+        m_shelves.append(newShelf(t, cid));
+        fetch(t, cid);          // concurrent; replies funnel through ingest
+    }
+    emit shelvesChanged();
+}
+
+void CatalogService::ingest(const QString& type, const QString& catalogId,
+                            const QByteArray& body)
 {
     QVariantList items;
+    int dropped = 0;
     const QJsonDocument doc = QJsonDocument::fromJson(body);
     const QJsonArray metas = doc.object().value(QLatin1String("metas")).toArray();
-
-    int dropped = 0;
     for (const auto& v : metas) {
-        const QVariantMap item =
-            itemFromMeta(v.toObject().toVariantMap(), m_baseUrl);
-        if (item.isEmpty()) {
-            ++dropped;
-            continue;
-        }
+        const QVariantMap item = itemFromMeta(v.toObject().toVariantMap(),
+                                              m_baseUrl);
+        if (item.isEmpty()) { ++dropped; continue; }
         items.append(item);
     }
     if (dropped > 0)
@@ -93,7 +139,27 @@ void CatalogService::handleReply(const QString& type,
                      "catalog: dropped %d malformed entries (%s/%s)\n",
                      dropped, qPrintable(type), qPrintable(catalogId));
     m_lastError.clear();
-    emit catalogReady(type, catalogId, items);
+
+    // Fold into the shelf container (ad-hoc fetches append a shelf row too
+    // so single-shelf consumers keep working).
+    int idx = indexOfShelf(type, catalogId);
+    if (idx < 0) {
+        m_order << type + QLatin1Char('/') + catalogId;
+        m_shelves.append(newShelf(type, catalogId));
+        idx = int(m_shelves.size()) - 1;
+    }
+    auto shelf = m_shelves[idx].toMap();
+    shelf[QLatin1String("items")]   = items;
+    shelf[QLatin1String("loading")] = false;
+    m_shelves[idx] = shelf;
+    emit shelvesChanged();
+}
+
+void CatalogService::handleReply(const QString& type,
+                                 const QString& catalogId,
+                                 const QByteArray& body)
+{
+    ingest(type, catalogId, body);   // shared parse path (test-driven)
 }
 
 } // namespace nuvio::library
