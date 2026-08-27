@@ -15,6 +15,9 @@
 #include <nuvio/authsync/AuthService.h>
 #include <nuvio/authsync/SyncRpcClient.h>
 
+#include <nuvio/settings/PropertiesStore.h>
+#include <nuvio/settings/SyncIdentity.h>
+
 #include <QCoreApplication>
 #include <QDir>
 #include <QEventLoop>
@@ -42,7 +45,7 @@ static int failures = 0;
 
 namespace {
 
-constexpr int kContractProfileId = 900001;   // reserved: never a real user
+constexpr int kMaxProfiles = 6;   // Compose ProfileModels.MAX_PROFILES
 
 struct RpcOutcome {
     bool fired = false;
@@ -125,7 +128,7 @@ int main(int argc, char** argv)
         CHECK(runRpc(anon,
                      QString::fromLatin1(nuvio::authsync::SyncFn::kPullProfileBlob),
                      QJsonObject{{QStringLiteral("p_profile_id"),
-                                  kContractProfileId},
+                                  1},
                                  {QStringLiteral("p_platform"),
                                   QStringLiteral("desktop")}},
                      &out),
@@ -140,7 +143,7 @@ int main(int argc, char** argv)
         CHECK(runRpc(anon,
                      QString::fromLatin1(nuvio::authsync::SyncFn::kPushProfileBlob),
                      QJsonObject{{QStringLiteral("p_profile_id"),
-                                  kContractProfileId},
+                                  1},
                                  {QStringLiteral("p_platform"),
                                   QStringLiteral("desktop")}},
                      &pout),
@@ -187,54 +190,166 @@ int main(int argc, char** argv)
             SyncRpcClient authed(cfg,
                                  [&auth] { return auth.accessToken(); });
 
-            const QString marker =
-                QStringLiteral("ct-%1")
-                    .arg(QRandomGenerator::global()->bounded(1000000));
-            const QJsonObject playerFragment{
-                {QStringLiteral("preferred_audio_language_1"),
-                 QJsonObject{{QLatin1String("type"),
-                              QLatin1String("string")},
-                             {QLatin1String("value"), marker}}}};
+            // Origin id must satisfy the server's client-id contract:
+            // mint it through the PRODUCTION SyncIdentity path (same
+            // loader/generator the app uses), persisted into the test's
+            // redirected config dir.
+            nuvio::settings::PropertiesStore identityStore(
+                nuvio::settings::PropertiesStore::defaultPath(
+                    nuvio::settings::SyncIdentity::kStoreName));
+            const QString originId = QString::fromUtf8(
+                nuvio::settings::SyncIdentity::currentClientId(identityStore)
+                    .toUtf8());
+            CHECK(nuvio::settings::SyncIdentity::isValidClientId(originId),
+                  "minted origin id passes validity contract");
 
-            RpcOutcome pout;
-            const bool pushed = runRpc(
-                authed, QString::fromLatin1(nuvio::authsync::SyncFn::kPushProfileBlob),
-                QJsonObject{
-                    {QStringLiteral("p_profile_id"), kContractProfileId},
-                    {QStringLiteral("p_platform"),
-                     QStringLiteral("desktop")},
-                    {QStringLiteral("p_origin_client_id"),
-                     QStringLiteral("nuvio-mobile-contract-test")},
-                    {QStringLiteral("p_settings_json"),
-                     QJsonObject{{QStringLiteral("version"), 3},
-                                 {QStringLiteral("features"),
-                                  QJsonObject{{QStringLiteral(
-                                                   "player_settings"),
-                                               playerFragment}}}}}},
-                &pout);
-            CHECK(pushed && pout.ok, "tier1 push accepted by production");
-            std::fprintf(stderr, "TIER1 push: ok=%d status=%d\n",
-                         int(pout.ok), pout.status);
+            // ---- 1. Discover profiles, pick a FREE index ----------------
+            // Profile ids are SERVER-VALIDATED account indexes (1..6);
+            // arbitrary ids raise P0001 "Invalid profile id". The round-
+            // trip therefore runs on a throwaway profile we create+delete.
+            int contractIndex = 0;
+            {
+                RpcOutcome lout;
+                const bool ok = runRpc(authed,
+                    QStringLiteral("sync_pull_profiles"), QJsonObject{},
+                    &lout);
+                CHECK(ok && lout.ok, "tier1 sync_pull_profiles accepted");
+                if (!ok || !lout.ok) {
+                    std::fprintf(stderr, "TIER1 profiles body: %s\n",
+                                 lout.doc.toJson(QJsonDocument::Compact)
+                                     .constData());
+                } else {
+                    bool used[kMaxProfiles + 1] = {};
+                    for (const auto& v : lout.doc.array()) {
+                        const int idx = v.toObject()
+                                            .value(QStringLiteral(
+                                                "profile_index"))
+                                            .toInt();
+                        if (idx >= 1 && idx <= kMaxProfiles) used[idx] = true;
+                    }
+                    for (int i = kMaxProfiles; i >= 1; --i) {
+                        if (!used[i]) { contractIndex = i; break; }
+                    }
+                    if (contractIndex == 0)
+                        std::fprintf(stderr,
+                                     "TIER1 skipped: all %d profile indexes "
+                                     "in use; refusing to touch real "
+                                     "profiles\n", kMaxProfiles);
+                }
+            }
 
-            if (pushed && pout.ok) {
-                RpcOutcome gout;
-                const bool pulled = runRpc(
-                    authed, QString::fromLatin1(nuvio::authsync::SyncFn::kPullProfileBlob),
-                    QJsonObject{{QStringLiteral("p_profile_id"),
-                                 kContractProfileId},
+            if (contractIndex != 0) {
+                // ---- 2. Create the throwaway contract profile ----------
+                RpcOutcome cout;
+                const bool created = runRpc(
+                    authed, QStringLiteral("sync_push_profiles"),
+                    QJsonObject{
+                        {QStringLiteral("p_client_max_profiles"),
+                         kMaxProfiles},
+                        {QStringLiteral("p_origin_client_id"), originId},
+                        {QStringLiteral("p_profiles"),
+                         QJsonArray{QJsonObject{
+                             {QStringLiteral("profile_index"),
+                              contractIndex},
+                             {QStringLiteral("name"),
+                              QStringLiteral("qt-contract-tmp")},
+                             {QStringLiteral("avatar_color_hex"),
+                              QStringLiteral("#1E88E5")},
+                             {QStringLiteral("uses_primary_addons"), false},
+                             {QStringLiteral("uses_primary_plugins"),
+                              false}}}}},
+                    &cout);
+                CHECK(created && cout.ok,
+                      "tier1 contract profile created");
+                std::fprintf(stderr, "TIER1 create: ok=%d status=%d\n",
+                             int(cout.ok), cout.status);
+                if (!cout.ok)
+                    std::fprintf(stderr, "TIER1 create body: %s\n",
+                                 cout.doc.toJson(QJsonDocument::Compact)
+                                     .constData());
+
+                if (created && cout.ok) {
+                    const QString marker =
+                        QStringLiteral("ct-%1")
+                            .arg(QRandomGenerator::global()->bounded(
+                                1000000));
+                    const QJsonObject playerFragment{
+                        {QStringLiteral("preferred_audio_language_1"),
+                         QJsonObject{{QLatin1String("type"),
+                                      QLatin1String("string")},
+                                     {QLatin1String("value"), marker}}}};
+
+                    // ---- 3. Blob push on the throwaway profile ----------
+                    RpcOutcome pout;
+                    const bool pushed = runRpc(
+                        authed,
+                        QString::fromLatin1(
+                            nuvio::authsync::SyncFn::kPushProfileBlob),
+                        QJsonObject{
+                            {QStringLiteral("p_profile_id"), contractIndex},
+                            {QStringLiteral("p_platform"),
+                             QStringLiteral("desktop")},
+                            {QStringLiteral("p_origin_client_id"), originId},
+                            {QStringLiteral("p_settings_json"),
+                             QJsonObject{{QStringLiteral("version"), 3},
+                                         {QStringLiteral("features"),
+                                          QJsonObject{{QStringLiteral(
+                                                       "player_settings"),
+                                                       playerFragment}}}}}},
+                        &pout);
+                    CHECK(pushed && pout.ok,
+                          "tier1 push accepted by production");
+                    std::fprintf(stderr, "TIER1 push: ok=%d status=%d\n",
+                                 int(pout.ok), pout.status);
+                    if (!pout.ok)
+                        std::fprintf(stderr, "TIER1 push body: %s\n",
+                                     pout.doc.toJson(QJsonDocument::Compact)
+                                         .constData());
+
+                    // ---- 4. Blob pull + exact echo verify ---------------
+                    if (pushed && pout.ok) {
+                        RpcOutcome gout;
+                        const bool pulled = runRpc(
+                            authed,
+                            QString::fromLatin1(
+                                nuvio::authsync::SyncFn::kPullProfileBlob),
+                            QJsonObject{
+                                {QStringLiteral("p_profile_id"),
+                                 contractIndex},
                                 {QStringLiteral("p_platform"),
                                  QStringLiteral("desktop")}},
-                    &gout);
-                CHECK(pulled && gout.ok, "tier1 pull accepted");
+                            &gout);
+                        CHECK(pulled && gout.ok, "tier1 pull accepted");
 
-                const QString echoed = envelopeValue(
-                    gout.doc,
-                    QStringLiteral("preferred_audio_language_1"));
-                std::fprintf(stderr, "TIER1 echoed=%s want=%s\n",
-                             echoed.toUtf8().constData(),
-                             marker.toUtf8().constData());
-                CHECK(echoed == marker,
-                      "tier1 round-trip echoes exact marker");
+                        const QString echoed = envelopeValue(
+                            gout.doc,
+                            QStringLiteral("preferred_audio_language_1"));
+                        std::fprintf(stderr, "TIER1 echoed=%s want=%s\n",
+                                     echoed.toUtf8().constData(),
+                                     marker.toUtf8().constData());
+                        CHECK(echoed == marker,
+                              "tier1 round-trip echoes exact marker");
+                    }
+
+                    // ---- 5. Cleanup: delete the throwaway profile -------
+                    RpcOutcome dout;
+                    const bool deleted = runRpc(
+                        authed,
+                        QStringLiteral("sync_delete_profile_data"),
+                        QJsonObject{
+                            {QStringLiteral("p_profile_id"), contractIndex},
+                            {QStringLiteral("p_origin_client_id"), originId}},
+                        &dout);
+                    CHECK(deleted && dout.ok,
+                          "tier1 cleanup deleted contract profile");
+                    std::fprintf(stderr, "TIER1 cleanup: ok=%d status=%d\n",
+                                 int(dout.ok), dout.status);
+                    if (!dout.ok)
+                        std::fprintf(stderr,
+                                     "TIER1 CLEANUP FAILED - leftover "
+                                     "profile index %d may need manual "
+                                     "removal\n", contractIndex);
+                }
             }
         }
     } else {
