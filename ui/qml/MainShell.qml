@@ -113,7 +113,7 @@ ApplicationWindow {
         function onTrailerResolved(url, audioUrl) {
             if (smokeActive) return
             navigation.push("video")
-            pageItem.launchMedia(url)
+            pageItem.launchMedia(url, audioUrl)
         }
         function onTrailerFailed() {
             toastText.text = qsTr("Trailer unavailable right now")

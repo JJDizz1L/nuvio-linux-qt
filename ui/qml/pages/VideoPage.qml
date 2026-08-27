@@ -47,9 +47,13 @@ Item {
             ev.accepted = true
     }
 
-    /** Entry point from the shell's playFromLaunch hook. */
-    function launchMedia(source) {
-        mpv.play(source)
+    /**
+     * Entry point from the shell's playFromLaunch hook. `audioUrl` is the
+     * optional separate-audio stream (trailer adaptive_separate path); empty
+     * means the source is muxed and mpv plays its own audio.
+     */
+    function launchMedia(source, audioUrl) {
+        mpv.play(source, audioUrl || "")
     }
 
     // ---- chrome auto-hide --------------------------------------------------
