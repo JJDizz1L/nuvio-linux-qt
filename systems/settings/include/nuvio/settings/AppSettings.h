@@ -43,6 +43,16 @@ class AppSettings final : public QObject {
                    setSubtitleFontSize NOTIFY subtitleStyleChanged)
     Q_PROPERTY(QString subtitleTextColor READ subtitleTextColor WRITE
                    setSubtitleTextColor NOTIFY subtitleStyleChanged)
+    // Outline/bold/offset setters + getters predate the UI; register them
+    // like the two above or QML reads yield undefined (dead switches/sliders).
+    Q_PROPERTY(bool subtitleOutlineEnabled READ subtitleOutlineEnabled WRITE
+                   setSubtitleOutlineEnabled NOTIFY subtitleStyleChanged)
+    Q_PROPERTY(int subtitleOutlineWidth READ subtitleOutlineWidth WRITE
+                   setSubtitleOutlineWidth NOTIFY subtitleStyleChanged)
+    Q_PROPERTY(bool subtitleBold READ subtitleBold
+                   WRITE setSubtitleBold NOTIFY subtitleStyleChanged)
+    Q_PROPERTY(int subtitleBottomOffset READ subtitleBottomOffset WRITE
+                   setSubtitleBottomOffset NOTIFY subtitleStyleChanged)
 
     // Poster hover preview (Qt-line-local keys; Compose keeps these inside
     // its opaque poster_card_style payload — no cross-line contract yet).

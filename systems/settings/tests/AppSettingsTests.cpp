@@ -147,6 +147,23 @@ int main(int argc, char** argv)
               "post-migration read from parity store");
         CHECK(s2.cacheMb() == 512, "post-migration cache enum round-trip");
     }
+    { // QML-facing property registration: methods WITHOUT Q_PROPERTY are
+      // invisible to QML (reads yield undefined -> dead bindings). Pin the
+      // subtitle-appearance registrations (the 2026-08-27 bug class).
+        const QMetaObject* mo = &AppSettings::staticMetaObject;
+        CHECK(mo->indexOfProperty("subtitleFontSize") >= 0,
+              "subtitleFontSize registered");
+        CHECK(mo->indexOfProperty("subtitleTextColor") >= 0,
+              "subtitleTextColor registered");
+        CHECK(mo->indexOfProperty("subtitleOutlineEnabled") >= 0,
+              "subtitleOutlineEnabled registered");
+        CHECK(mo->indexOfProperty("subtitleOutlineWidth") >= 0,
+              "subtitleOutlineWidth registered");
+        CHECK(mo->indexOfProperty("subtitleBold") >= 0,
+              "subtitleBold registered");
+        CHECK(mo->indexOfProperty("subtitleBottomOffset") >= 0,
+              "subtitleBottomOffset registered");
+    }
 
     std::printf(failures ? "SETTINGS-APP SUITE FAILURES=%d\n"
                          : "SETTINGS-APP SUITE OK (%d failures)\n",
