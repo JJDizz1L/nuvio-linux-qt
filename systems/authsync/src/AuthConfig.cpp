@@ -73,6 +73,8 @@ AuthConfig AuthConfig::load()
     AuthConfig c;
     c.baseUrl  = qgetenv("NUVIO_SUPABASE_URL");
     c.anonKey  = qgetenv("NUVIO_SUPABASE_ANON_KEY");
+    while (c.baseUrl.endsWith('/'))
+        c.baseUrl.chop(1);          // keep derived URLs single-slash clean
     if (!c.anonKey.isEmpty() && !c.baseUrl.isEmpty()) return c;
 
     if (auto props = findLocalProperties()) {
@@ -81,6 +83,7 @@ AuthConfig AuthConfig::load()
                 into = props->value(QLatin1String(k)).toUtf8();
         };
         get("NUVIO_SUPABASE_URL", c.baseUrl);
+        while (c.baseUrl.endsWith('/')) c.baseUrl.chop(1);
         get("NUVIO_SUPABASE_ANON_KEY", c.anonKey);
     }
     return c;

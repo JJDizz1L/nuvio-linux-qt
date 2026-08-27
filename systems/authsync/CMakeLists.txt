@@ -33,3 +33,10 @@ add_executable(nuvio_sync_orchestrator_tests tests/SyncOrchestratorTests.cpp)
 target_link_libraries(nuvio_sync_orchestrator_tests PRIVATE nuvio::authsync Qt6::Network)
 nuvio_common_target_props(nuvio_sync_orchestrator_tests)
 add_test(NAME nuvio_sync_orchestrator COMMAND nuvio_sync_orchestrator_tests)
+add_executable(nuvio_sync_contract_tests tests/SyncContractTests.cpp)
+target_link_libraries(nuvio_sync_contract_tests PRIVATE nuvio::authsync Qt6::Network)
+nuvio_common_target_props(nuvio_sync_contract_tests)
+# Env-gated: SKIP unless NUVIO_SYNC_CONTRACT=1 (production traffic!).
+add_test(NAME nuvio_sync_contract COMMAND nuvio_sync_contract_tests)
+set_tests_properties(nuvio_sync_contract PROPERTIES
+    ENVIRONMENT "NUVIO_SYNC_CONTRACT=$ENV{NUVIO_SYNC_CONTRACT}")
