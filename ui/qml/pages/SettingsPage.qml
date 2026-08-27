@@ -164,6 +164,52 @@ Item {
                     }
                 }
             }
+            Row {
+                width: parent.width
+                spacing: Theme.spacingSm
+                Switch {
+                    id: outlineSwitch
+                    checked: appsettings.subtitleOutlineEnabled
+                    onToggled: appsettings.subtitleOutlineEnabled = checked
+                }
+                Text {
+                    text: qsTr("Outline")
+                    color: Theme.textPrimary
+                    font.pixelSize: 15
+                    anchors.verticalCenter: parent.verticalCenter
+                }
+                Slider {
+                    id: outlineWidth
+                    from: 0; to: 6; stepSize: 1
+                    value: appsettings.subtitleOutlineWidth
+                    enabled: outlineSwitch.checked
+                    width: 160
+                    anchors.verticalCenter: parent.verticalCenter
+                    onMoved: appsettings.subtitleOutlineWidth = value
+                }
+                Switch {
+                    checked: appsettings.subtitleBold
+                    onToggled: appsettings.subtitleBold = checked
+                    text: qsTr("Bold")
+                }
+            }
+            Row {
+                width: parent.width
+                spacing: Theme.spacingSm
+                Text {
+                    width: parent.width * 0.4
+                    text: qsTr("Bottom offset")
+                    color: Theme.textPrimary
+                    font.pixelSize: 15
+                    anchors.verticalCenter: parent.verticalCenter
+                }
+                Slider {
+                    width: parent.width * 0.6
+                    from: 0; to: 200; stepSize: 5
+                    value: appsettings.subtitleBottomOffset
+                    onMoved: appsettings.subtitleBottomOffset = value
+                }
+            }
         }
 
         // ---- playback: track languages ------------------------------------------

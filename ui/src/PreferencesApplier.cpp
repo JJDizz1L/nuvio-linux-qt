@@ -44,6 +44,17 @@ void PreferencesApplier::applySubtitles()
                             QString::number(m_settings->subtitleFontSize()));
     ctrl->setPropertyString(QStringLiteral("sub-color"),
                             m_settings->subtitleTextColor());
+    ctrl->setPropertyString(QStringLiteral("sub-border-style"),
+        m_settings->subtitleOutlineEnabled() ? QStringLiteral("1")
+                                             : QStringLiteral("0"));
+    ctrl->setPropertyString(QStringLiteral("sub-outline-size"),
+        QString::number(m_settings->subtitleOutlineEnabled()
+                            ? m_settings->subtitleOutlineWidth() : 0));
+    ctrl->setPropertyString(QStringLiteral("sub-bold"),
+        m_settings->subtitleBold() ? QStringLiteral("yes")
+                                   : QStringLiteral("no"));
+    ctrl->setPropertyString(QStringLiteral("sub-margin-y"),
+        QString::number(m_settings->subtitleBottomOffset()));
 }
 
 /// Compose parity rule (AGENTS.md): forward buffer = user setting;

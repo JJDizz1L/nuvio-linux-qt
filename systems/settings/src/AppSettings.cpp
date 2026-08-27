@@ -283,6 +283,60 @@ void AppSettings::setDiscordEnabled(bool v)
 
 // ---- subtitle appearance (Compose-parity keys, mpv-applied) -----------------
 
+bool AppSettings::subtitleOutlineEnabled() const
+{
+    return m_store->player.getBoolean(
+        profileScoped("subtitle_outline_enabled")).value_or(true);
+}
+
+void AppSettings::setSubtitleOutlineEnabled(bool v)
+{
+    if (subtitleOutlineEnabled() == v) return;
+    m_store->player.putBoolean(profileScoped("subtitle_outline_enabled"), v);
+    emit subtitleStyleChanged();
+}
+
+int AppSettings::subtitleOutlineWidth() const
+{
+    return m_store->player.getInt(
+        profileScoped("subtitle_outline_width")).value_or(2);
+}
+
+void AppSettings::setSubtitleOutlineWidth(int v)
+{
+    v = std::clamp(v, 0, 6);
+    if (subtitleOutlineWidth() == v) return;
+    m_store->player.putInt(profileScoped("subtitle_outline_width"), v);
+    emit subtitleStyleChanged();
+}
+
+bool AppSettings::subtitleBold() const
+{
+    return m_store->player.getBoolean(
+        profileScoped("subtitle_bold")).value_or(false);
+}
+
+void AppSettings::setSubtitleBold(bool v)
+{
+    if (subtitleBold() == v) return;
+    m_store->player.putBoolean(profileScoped("subtitle_bold"), v);
+    emit subtitleStyleChanged();
+}
+
+int AppSettings::subtitleBottomOffset() const
+{
+    return m_store->player.getInt(
+        profileScoped("subtitle_bottom_offset")).value_or(20);
+}
+
+void AppSettings::setSubtitleBottomOffset(int v)
+{
+    v = std::clamp(v, 0, 200);
+    if (subtitleBottomOffset() == v) return;
+    m_store->player.putInt(profileScoped("subtitle_bottom_offset"), v);
+    emit subtitleStyleChanged();
+}
+
 int AppSettings::subtitleFontSize() const
 {
     const auto raw = m_store->player.getInt(

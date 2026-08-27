@@ -76,6 +76,14 @@ public:
     void                  setSubtitleFontSize(int v);
     [[nodiscard]] QString subtitleTextColor() const;   // "#RRGGBBAA"
     void                  setSubtitleTextColor(const QString& v);
+    [[nodiscard]] bool    subtitleOutlineEnabled() const;
+    void                  setSubtitleOutlineEnabled(bool v);
+    [[nodiscard]] int     subtitleOutlineWidth() const;
+    void                  setSubtitleOutlineWidth(int v);
+    [[nodiscard]] bool    subtitleBold() const;
+    void                  setSubtitleBold(bool v);
+    [[nodiscard]] int     subtitleBottomOffset() const;
+    void                  setSubtitleBottomOffset(int v);
 
     /// --- remote-profile-sync surface (leg 4) ---------------------------------
     /// Current player-settings feature payload (Compose blob v3 fragment).
