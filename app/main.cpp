@@ -17,6 +17,7 @@
 #include "nuvio/mpv/MpvController.h"
 #include "nuvio/mpv/MpvLog.h"
 #include "nuvio/mpv/MpvQuickItem.h"
+#include "nuvio/authsync/AuthService.h"
 #include "nuvio/ui/NavigationModel.h"
 #include "nuvio/ui/PosterProvider.h"
 #include "nuvio/ui/UiBootstrap.h"
@@ -91,6 +92,8 @@ int main(int argc, char* argv[])
     // Declared after controller so teardown order unwinds nav before the
     // mpv core joins (QML is already dead by then either way).
     auto navigation = std::make_unique<nuvio::ui::NavigationModel>();
+    auto auth       = std::make_unique<nuvio::authsync::AuthService>();
+    auth->restoreSession();     // stored tokens -> active or silent refresh
 
     QQmlApplicationEngine engine;
     QObject::connect(&engine, &QQmlEngine::quit,
@@ -99,6 +102,8 @@ int main(int argc, char* argv[])
     engine.rootContext()->setContextProperty(
         QStringLiteral("navigation"), QVariant::fromValue<QObject*>(
                                           navigation.get()));
+    engine.rootContext()->setContextProperty(
+        QStringLiteral("auth"), QVariant::fromValue<QObject*>(auth.get()));
     engine.addImageProvider(QStringLiteral("poster"),
                             new nuvio::ui::PosterProvider());  // engine takes ownership
     engine.rootContext()->setContextProperty(
@@ -129,6 +134,10 @@ int main(int argc, char* argv[])
         QMetaObject::invokeMethod(root, "playFromLaunch",
                                   Q_ARG(QVariant, launchUrl));
     }
+
+    // Route seeding: signed-out users land on Welcome; smoke harness and
+    // signed-in sessions go straight to their working routes.
+    if (!auth->sessionActive()) navigation->replaceTop("welcome");
 
     if (smoke) {
         static nuvio::app::SmokeRunner runner;   // app-lifetime harness

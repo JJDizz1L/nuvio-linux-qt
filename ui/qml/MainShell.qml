@@ -41,6 +41,10 @@ ApplicationWindow {
         anchors.fill: parent
         visible: !smokeActive && navigation.currentRoute === "home"
     }
+    Pages.WelcomePage {
+        anchors.fill: parent
+        visible: navigation.currentRoute === "welcome"
+    }
     Pages.LibraryPage {
         anchors.fill: parent
         visible: navigation.currentRoute === "library"

@@ -55,11 +55,11 @@ include(CTest)
 # Order encodes layering; leaves (mpv, library, ...) may not reference ui/.
 add_subdirectory(systems/mpv)
 add_subdirectory(systems/playback)
+add_subdirectory(systems/settings)      # first: authsync stores sessions in it
+add_subdirectory(systems/platform)
 add_subdirectory(systems/library)
 add_subdirectory(systems/authsync)
 add_subdirectory(systems/tracking)
 add_subdirectory(systems/integrations)
-add_subdirectory(systems/settings)
-add_subdirectory(systems/platform)
 add_subdirectory(ui)
 add_subdirectory(app)
