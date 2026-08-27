@@ -90,7 +90,13 @@ private:
     void threadMain();
     bool initializeCoreOnThread(QString* errOut);
     void processEvent(struct mpv_event* ev);
-    void publishSnapshotPlayback();                     ///< rate-limited
+    /**
+     * Rate-limited (~15 Hz) broadcast for high-rate fields. urgent=true
+     * (pause/eof/paused-for-cache flips) bypasses the interval: coalescing
+     * a flag flip is how the item ends up permanently stale — pausing
+     * silences the very event stream that would otherwise flush it.
+     */
+    void publishSnapshotPlayback(bool urgent = false);
     void maybeAutoFallbackDecode(const QByteArray& msgText, int level);
     void executeOnThread(const QStringList& args);
     [[nodiscard]] static QString copyModeOf(const QString& chain);

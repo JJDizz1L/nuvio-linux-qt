@@ -6,6 +6,7 @@ import "../theme"
 
 Item {
     id: page
+    focus: true            // media keyboard ownership while playback is up
 
     // `mpvController` resolves from engine context properties — set
     // unconditionally in main.cpp so this binding never sees undefined.
@@ -14,6 +15,36 @@ Item {
         anchors.fill: parent
         controller: mpvController
         activeFocusOnTab: true
+    }
+
+    // ---- directive W2: mpv owns the media keyboard --------------------------
+    // Real key events are forwarded VERBATIM by name; mpv resolves them
+    // against its defaults + the user's input.conf (the file wins inside
+    // mpv). Keys nothing claims no-op inside mpv — we never build a second
+    // media key map here, and app-level shortcuts (F11/Esc) live above.
+    function mpvKeyName(ev) {
+        switch (ev.key) {
+        case Qt.Key_Space:  return "Space"
+        case Qt.Key_Left:   return "Left"
+        case Qt.Key_Right:  return "Right"
+        case Qt.Key_Up:     return "Up"
+        case Qt.Key_Down:   return "Down"
+        case Qt.Key_Return:
+        case Qt.Key_Enter:  return "Enter"
+        default: break
+        }
+        // Printable ASCII forwards 1:1 under its display name ("f" -> f).
+        if (ev.text.length === 1) {
+            const c = ev.text.toUpperCase().charCodeAt(0)
+            if ((c >= 65 && c <= 90) || (c >= 48 && c <= 57))
+                return ev.text.toUpperCase()
+        }
+        return ""              // everything else: not ours to translate
+    }
+    Keys.onPressed: (ev) => {
+        const name = mpvKeyName(ev)
+        if (name.length > 0 && mpv.sendKey(name))
+            ev.accepted = true
     }
 
     /** Entry point from the shell's playFromLaunch hook. */

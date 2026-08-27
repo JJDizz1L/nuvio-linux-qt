@@ -9,6 +9,11 @@
 #include <QPointer>
 #include <QTimer>
 
+#include <cstdio>
+#include <filesystem>
+#include <fstream>
+#include <functional>
+
 namespace nuvio::app {
 
 namespace {
@@ -26,6 +31,33 @@ bool SmokeRunner::requested(Config* out)
     bool ok = false;
     const int v = qEnvironmentVariable("NUVIO_QT_SMOKE_TIMEOUT").toInt(&ok);
     if (ok && v > 0) c.timeoutSeconds = v;
+
+    // Directive-W2 acceptance: scratch MPV_HOME must exist BEFORE the
+    // controller initializes (this runs ahead of controller->start()).
+    if (qEnvironmentVariableIsSet("NUVIO_QT_KEYTEST")) {
+        namespace fs = std::filesystem;
+        std::error_code ec;
+        const fs::path home =
+            fs::temp_directory_path(ec) / "nuvio-qt-keytest-home";
+        fs::create_directories(home, ec);
+
+        // One comment line: a present mpv.conf takes the user-config branch,
+        // which is what enables the explicit input-conf pointing to this dir.
+        { std::ofstream f(home / "mpv.conf", std::ios::trunc);
+          f << "# keytest fixture (harness-owned)\n"; }
+
+        // Custom bind mpv would never guess: absolute seek to 30 s.
+        { std::ofstream f(home / "input.conf", std::ios::trunc);
+          f << "F7 seek 30 absolute\n"; }
+
+        qputenv("MPV_HOME", QByteArray::fromStdString(home.string()));
+        c.keyTest = true;
+        if (c.timeoutSeconds < 40) c.timeoutSeconds = 40;   // staged sequence
+        std::fprintf(stderr,
+                     "KEYTEST-SETUP: MPV_HOME=%s (input.conf F7=seek30)\n",
+                     home.string().c_str());
+    }
+
     if (out) *out = c;
     return true;
 }
@@ -58,6 +90,13 @@ void SmokeRunner::begin(QObject* itemObj, QObject* controllerObj,
         bool   done      = false;
         int    advances  = 0;
         qint64 lastPosMs = -1;
+        // keytest staged-sequence bookkeeping (directive W2)
+        bool   keyStarted = false;
+        bool   spPauseOk  = false;
+        bool   spResumeOk = false;
+        bool   rightOk    = false;
+        bool   f7Ok       = false;
+        double prePos     = -1.0;
     };
     auto st                     = std::make_shared<State>();
     const QPointer<SmokeRunner> self(this);
@@ -108,11 +147,82 @@ void SmokeRunner::begin(QObject* itemObj, QObject* controllerObj,
                      },
                      Qt::QueuedConnection);
 
+    // ---- directive-W2 staged sequence (engine path) -------------------------
+    // Space → pause, Space → resume, Right → default +10 seek, F7 → the
+    // scratch input.conf custom bind (abs seek 30). Judged strictly; every
+    // step reads ground truth from the item snapshot afterwards.
+    //
+    // Self-reference note: the chain re-arms itself through singleShot, so
+    // the callable must live behind a shared_ptr — capturing the local by
+    // value would snapshot an empty std::function.
+    auto keyStepPtr = std::make_shared<std::function<void(int)>>();
+    auto sendK = [ctrl](const char* k) {
+        ctrl->enqueueCommand({QStringLiteral("keypress"),
+                              QString::fromLatin1(k)});
+    };
+    auto keyFinish = [st, finish](bool pass) {
+        finish(pass,
+               QStringLiteral("keytest pause:%1 resume:%2 right:%3 f7:%4")
+                   .arg(st->spPauseOk ? 1 : 0)
+                   .arg(st->spResumeOk ? 1 : 0)
+                   .arg(st->rightOk ? 1 : 0)
+                   .arg(st->f7Ok ? 1 : 0));
+    };
+    *keyStepPtr = [st, item, keyStepPtr, keyFinish, sendK](int n) {
+        if (st->done) return;
+        const auto s = item->snapshotPublic();
+        switch (n) {
+        case 0:
+            st->prePos = s.positionSec;
+            sendK("Space");
+            QTimer::singleShot(900, item,
+                               [keyStepPtr] { (*keyStepPtr)(1); });
+            return;
+        case 1:
+            st->spPauseOk = s.paused;
+            if (!s.paused)
+                std::fprintf(stderr, "KEYTEST-FAIL: Space did not pause\n");
+            sendK("Space");
+            QTimer::singleShot(800, item,
+                               [keyStepPtr] { (*keyStepPtr)(2); });
+            return;
+        case 2:
+            st->spResumeOk = !s.paused;
+            if (s.paused)
+                std::fprintf(stderr,
+                             "KEYTEST-FAIL: second Space did not resume\n");
+            st->prePos = s.positionSec;
+            sendK("Right");
+            QTimer::singleShot(1600, item,
+                               [keyStepPtr] { (*keyStepPtr)(3); });
+            return;
+        case 3:
+            st->rightOk = s.positionSec >= st->prePos + 5.0;
+            if (!st->rightOk)
+                std::fprintf(stderr,
+                             "KEYTEST-FAIL: Right no-seek (%.2f -> %.2f)\n",
+                             st->prePos, s.positionSec);
+            sendK("F7");
+            QTimer::singleShot(2200, item,
+                               [keyStepPtr] { (*keyStepPtr)(4); });
+            return;
+        case 4:
+            st->f7Ok = qAbs(s.positionSec - 30.0) <= 8.0;
+            if (!st->f7Ok)
+                std::fprintf(stderr,
+                             "KEYTEST-FAIL: F7 custom bind landed at %.2f "
+                             "(want ~30)\n", s.positionSec);
+            keyFinish(st->spPauseOk && st->spResumeOk && st->rightOk &&
+                      st->f7Ok);
+            return;
+        }
+    };
+
     // Position-advance sampler — armed after the buffering grace window.
     auto* sampler = new QTimer(item);
     sampler->setInterval(250);
     QObject::connect(sampler, &QTimer::timeout, item,
-                     [st, item, finish] {
+                     [st, item, finish, keyStepPtr, keyTest = cfg.keyTest] {
                          if (st->done) return;
                          const auto s = item->snapshotPublic();
                          if (s.positionSec < 0) return;
@@ -121,6 +231,16 @@ void SmokeRunner::begin(QObject* itemObj, QObject* controllerObj,
                          if (st->lastPosMs >= 0 && posMs != st->lastPosMs)
                              ++st->advances;
                          st->lastPosMs = posMs;
+                         if (keyTest) {
+                             // Keytest: normal PASS is superseded by the
+                             // staged sequence; the first real advance arms it.
+                             if (!st->keyStarted && st->advances >= 1 &&
+                                 s.durationSec > 0) {
+                                 st->keyStarted = true;
+                                 (*keyStepPtr)(0);
+                             }
+                             return;
+                         }
                          if (st->advances >= kRequiredAdvances &&
                              s.durationSec > 0)
                              finish(true, QStringLiteral("advancing"));

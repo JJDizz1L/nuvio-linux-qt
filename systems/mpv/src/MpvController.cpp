@@ -462,7 +462,8 @@ void MpvController::processEvent(mpv_event* ev)
         // happens strictly outside the lock (no recursive locking).
         PlaybackSnapshot s;
         {   std::lock_guard<std::mutex> g(m_snapMutex); s = m_snapshot; }
-        bool dirty = false;
+        bool dirty     = false;
+        bool flagDirty = false;   // latency-critical flips publish urgently
 
         if (std::strcmp(prop->name, "time-pos") == 0 &&
             prop->format == MPV_FORMAT_DOUBLE && prop->data) {
@@ -482,11 +483,23 @@ void MpvController::processEvent(mpv_event* ev)
         } else if (prop->format == MPV_FORMAT_FLAG && prop->data) {
             const bool v = *static_cast<int*>(prop->data) != 0;
             if (std::strcmp(prop->name, "pause") == 0) {
-                if (v != s.paused) { s.paused = v; dirty = true; }
+                if (v != s.paused) {
+                    s.paused   = v;
+                    dirty      = true;
+                    flagDirty  = true;
+                }
             } else if (std::strcmp(prop->name, "eof-reached") == 0) {
-                if (v != s.eofReached) { s.eofReached = v; dirty = true; }
+                if (v != s.eofReached) {
+                    s.eofReached = v;
+                    dirty        = true;
+                    flagDirty    = true;
+                }
             } else if (std::strcmp(prop->name, "paused-for-cache") == 0) {
-                if (v != s.pausedForCache) { s.pausedForCache = v; dirty = true; }
+                if (v != s.pausedForCache) {
+                    s.pausedForCache = v;
+                    dirty            = true;
+                    flagDirty        = true;
+                }
             } else if (std::strcmp(prop->name, "seekable") == 0) {
                 if (v != s.seekable) { s.seekable = v; dirty = true; }
             }
@@ -550,8 +563,10 @@ void MpvController::processEvent(mpv_event* ev)
         if (dirty) {
             {   std::lock_guard<std::mutex> g(m_snapMutex); m_snapshot = s; }
             // Publish here too: FILE_LOADED alone proved insufficient to
-            // resume streaming once early deliveries coalesced away.
-            publishSnapshotPlayback();
+            // resume streaming once early deliveries coalesced away. Flag
+            // flips bypass the rate limiter — they are exactly the events a
+            // silence gap would otherwise strand (see header note).
+            publishSnapshotPlayback(flagDirty);
         }
         break;
     }
@@ -588,10 +603,10 @@ QString MpvController::debugCoreState()
         .arg(m_dbgPubs.load()).arg(m_dbgTpValX100.load());
 }
 
-void MpvController::publishSnapshotPlayback()
+void MpvController::publishSnapshotPlayback(const bool urgent)
 {
     const qint64 now = wallMs();
-    if (now - m_lastPublishMs < kPublishMinIntervalMs)
+    if (!urgent && now - m_lastPublishMs < kPublishMinIntervalMs)
         return;                       // coalesced; urgent paths emit directly
     m_lastPublishMs = now;
     emit snapshotChanged(snapshot());

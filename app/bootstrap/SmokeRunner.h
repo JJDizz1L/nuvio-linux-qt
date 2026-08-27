@@ -18,6 +18,10 @@ public:
     struct Config {
         QString url;
         int     timeoutSeconds = 25;     // NUVIO_QT_SMOKE_TIMEOUT overrides
+        // NUVIO_QT_KEYTEST=1: directive-W2 acceptance run. Creates a scratch
+        // MPV_HOME (input.conf custom bind) BEFORE core init, then drives
+        // Space/Right/F7 through the command queue and judges outcomes.
+        bool    keyTest = false;
     };
 
     /// True + fills cfg when NUVIO_QT_SMOKE_URL is present.

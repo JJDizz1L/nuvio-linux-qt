@@ -146,6 +146,15 @@ void MpvQuickItem::togglePlayPause()
     m_controller->setPaused(!m_cachedSnap.paused);
 }
 
+bool MpvQuickItem::sendKey(const QString& mpvKeyName)
+{
+    if (!m_controller || mpvKeyName.isEmpty()) return false;
+    // Directive W2: raw forward onto the controller's command queue. mpv is
+    // the single input authority; we never pre-filter beyond emptiness.
+    m_controller->enqueueCommand(QStringList{MpvKeyMap::kPress, mpvKeyName});
+    return true;
+}
+
 void MpvQuickItem::seekBySeconds(double deltaSec)
 {
     if (!m_controller || !hasMedia()) return;

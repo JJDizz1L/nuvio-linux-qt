@@ -86,6 +86,12 @@ public slots:
     Q_INVOKABLE void stop();
     Q_INVOKABLE QString formatTime(double seconds) const;
 
+    /// Plan directive W2: forward a media key to mpv verbatim by name
+    /// ("Space", "Right", "F7", ...). mpv resolves it against default
+    /// bindings + the user's input.conf; keys nothing claims are harmless
+    /// no-ops there (QML-side app shortcuts stay independent).
+    Q_INVOKABLE bool sendKey(const QString& mpvKeyName);
+
 signals:
     void controllerChanged();
     void hasMediaChanged();
