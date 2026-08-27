@@ -162,6 +162,22 @@ void WatchingStore::upsert(const WatchEntry& entry)
     saveProgressPayload(payload);
 }
 
+void WatchingStore::upsertRemote(const WatchEntry& entry)
+{
+    auto payload = loadProgressPayload();
+    const std::string key = entry.resolvedProgressKey();
+    bool replaced = false;
+    for (auto& e : payload.entries) {
+        if (e.resolvedProgressKey() == key) {
+            e = entry;
+            replaced = true;
+            break;
+        }
+    }
+    if (!replaced) payload.entries.push_back(entry);
+    saveProgressPayload(payload);
+}
+
 void WatchingStore::remove(const std::string& progressKey)
 {
     auto payload = loadProgressPayload();

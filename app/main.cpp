@@ -1,5 +1,6 @@
 #include <QCommandLineParser>
 #include <QGuiApplication>
+#include <QPointer>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
 #include <QQuickStyle>
@@ -25,6 +26,7 @@
 #include "nuvio/mpv/MpvLog.h"
 #include "nuvio/mpv/MpvQuickItem.h"
 #include "nuvio/mpv/TrackAutoSelector.h"
+#include "nuvio/authsync/ProgressSyncController.h"
 #include "nuvio/authsync/AuthService.h"
 #include "nuvio/authsync/SyncOrchestrator.h"
 #include "nuvio/library/AddonRegistry.h"
@@ -219,6 +221,14 @@ int main(int argc, char* argv[])
         heroController->setVolumePercent(0);   // ambient: born muted
     }
 
+    // Watch-progress sync (sync-breadth leg): dirty pushes on recorder
+    // signals + startup full/delta pull. Self-guards when signed out.
+    auto progressSync =
+        std::make_unique<nuvio::authsync::ProgressSyncController>(
+            nuvio::authsync::AuthConfig::load(),
+            [ap = auth.get()] { return ap->accessToken(); }, 1);
+    progressSync->setDebounceMs(1500);
+
     // Profile-settings sync (P4 leg 4): background startup pull + debounced
     // push on settings changes. Fully self-guarding: signed-out or
     // unconfigured endpoints make every operation a silent no-op.
@@ -376,6 +386,38 @@ int main(int argc, char* argv[])
     engine.rootContext()->setContextProperty(
         QStringLiteral("watching"), QVariant::fromValue<QObject*>(
                                         watchRecorder.get()));
+
+    // Progress-sync triggers: recorder commits -> debounced dirty push;
+    // session (re)activation -> one full/delta pull then push. The
+    // controller self-guards on signed-out state.
+    QObject::connect(watchRecorder.get(),
+                     &nuvio::watching::WatchRecorder::resumeChanged,
+                     progressSync.get(),
+                     &nuvio::authsync::ProgressSyncController::
+                         onLocalProgressChanged);
+    QObject::connect(watchRecorder.get(),
+                     &nuvio::watching::WatchRecorder::continueWatchingChanged,
+                     progressSync.get(),
+                     &nuvio::authsync::ProgressSyncController::
+                         onLocalProgressChanged);
+    {
+        // One full/delta pull per session activation (initial + re-login).
+        bool initialSyncFired = false;
+        QPointer<nuvio::authsync::ProgressSyncController> ps(
+            progressSync.get());
+        QObject::connect(
+            auth.get(), &nuvio::authsync::AuthService::stateChanged,
+            auth.get(),
+            [ps, ap = auth.get(), &initialSyncFired] {
+                if (initialSyncFired || !ap->sessionActive()) return;
+                initialSyncFired = true;
+                if (ps) ps->fullSyncThenDeltas();
+            });
+        if (auth->sessionActive()) {
+            initialSyncFired = true;
+            progressSync->fullSyncThenDeltas();
+        }
+    }
 
     const QUrl shellUrl(QStringLiteral("qrc:/nuvio/qml/MainShell.qml"));
     engine.load(shellUrl);

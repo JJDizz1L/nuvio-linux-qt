@@ -7,6 +7,7 @@ add_library(nuvio_authsync STATIC
     include/nuvio/authsync/AuthService.h  src/AuthService.cpp
     include/nuvio/authsync/SyncRpcClient.h src/SyncRpcClient.cpp
     include/nuvio/authsync/SyncOrchestrator.h src/SyncOrchestrator.cpp
+    include/nuvio/authsync/ProgressSyncController.h src/ProgressSyncController.cpp
     src/AuthSyncSystem.cpp)
 
 target_include_directories(nuvio_authsync PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
@@ -14,7 +15,7 @@ target_include_directories(nuvio_authsync PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/inc
 # settings dependency: session persistence rides the shared PropertiesStore
 # (byte-compat with the Compose profile). Sibling-systems link, sanctioned.
 target_link_libraries(nuvio_authsync
-    PUBLIC Qt6::Core Qt6::Network nuvio::settings)
+    PUBLIC Qt6::Core Qt6::Network nuvio::settings nuvio::watching)
 nuvio_common_target_props(nuvio_authsync)
 add_library(nuvio::authsync ALIAS nuvio_authsync)
 
@@ -33,6 +34,10 @@ add_executable(nuvio_sync_orchestrator_tests tests/SyncOrchestratorTests.cpp)
 target_link_libraries(nuvio_sync_orchestrator_tests PRIVATE nuvio::authsync Qt6::Network)
 nuvio_common_target_props(nuvio_sync_orchestrator_tests)
 add_test(NAME nuvio_sync_orchestrator COMMAND nuvio_sync_orchestrator_tests)
+add_executable(nuvio_progress_sync_tests tests/ProgressSyncControllerTests.cpp)
+target_link_libraries(nuvio_progress_sync_tests PRIVATE nuvio::authsync nuvio::watching Qt6::Network)
+nuvio_common_target_props(nuvio_progress_sync_tests)
+add_test(NAME nuvio_progress_sync COMMAND nuvio_progress_sync_tests)
 add_executable(nuvio_sync_contract_tests tests/SyncContractTests.cpp)
 target_link_libraries(nuvio_sync_contract_tests PRIVATE nuvio::authsync Qt6::Network)
 nuvio_common_target_props(nuvio_sync_contract_tests)

@@ -52,6 +52,10 @@ public:
                        std::optional<int> season,
                        std::optional<int> episode);
 
+    /// Remote-merge variant: upserts WITHOUT marking dirty (the change came
+    /// FROM the server; re-pushing it would be a pointless echo).
+    void upsertRemote(const WatchEntry& entry);
+
     // ---- sync envelope (Compose repository-owned bookkeeping) --------------
     // Compose's WatchProgressRepository owns these values; Qt writes MUST
     // preserve them (entries-only encodes used to wipe them on every save,
