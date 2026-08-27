@@ -1,18 +1,19 @@
 #pragma once
 
 // Trailer extraction kernel - parity port of the Compose line's
-// InAppYouTubeExtractor.kt (2026-08-27 snapshot). Slice 1 = PURE layers:
+// InAppYouTubeExtractor.kt (2026-08-27 snapshot). This kernel stays PURE:
 //   * YouTube innertube client table (visionos > android_vr > android > ios)
 //   * player request body/header builders (fallback API key path)
 //   * streamingData -> scored candidates (formats / adaptiveFormats / HLS)
 //   * playback-source preference policy:
 //       adaptive_separate > progressive > hls_last_resort >
 //       adaptive_video_only (muted degenerate)
-// Network plumbing (watch-config fetch, reachability probes with mn-host
-// rotation) arrives in slice 2; until then the policy layer works on any
-// player-response body handed to it - exactly like the Compose structure
-// where InAppYouTubeExtractor funnels every wire result through these same
-// decisions.
+//   * googlevideo host-rotation candidate building (hostRotationCandidates)
+// Network plumbing (visitor-data/watch-config fetch and reachability probes
+// with mn-host rotation) lands in the RESOLVER (slice 3); the policy layer
+// works on any player-response body handed to it, exactly like the Compose
+// structure where InAppYouTubeExtractor funnels every wire result through
+// these same decisions.
 
 #include <QString>
 #include <QStringList>
@@ -89,6 +90,15 @@ struct StreamingBuckets {
 /// visionos-first partition, each half sorted (Compose orderSeparate).
 [[nodiscard]] QList<StreamCandidate> orderSeparate(
     const QList<StreamCandidate>& items);
+
+// ---- googlevideo host rotation ----------------------------------------------
+
+/// Ordered reachability candidates for a googlevideo URL: the original URL
+/// first, then one alternate per `mn` query-param server (rrN--- prefix or
+/// sn- token replacement, Compose parity). Non-googlevideo URLs or ones
+/// without alternates produce just [url]. Network probing itself lives in
+/// the resolver; this stays a pure URL transform for offline tests.
+[[nodiscard]] QStringList hostRotationCandidates(const QString& url);
 
 struct PlaybackSource {
     QString mode;        // adaptive_separate|progressive|hls_last_resort|

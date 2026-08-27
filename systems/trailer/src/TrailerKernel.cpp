@@ -4,6 +4,8 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QRegularExpression>
+#include <QUrl>
+#include <QUrlQuery>
 #include <algorithm>
 
 namespace nuvio::trailer {
@@ -246,8 +248,8 @@ std::optional<PlaybackSource> buildPlaybackSource(
     const QString& hlsManifestUrl)
 {
     // Tier order IS the Compose policy (REVIEW-NOTES T1). Reachability
-    // probing lands in slice 2; until then the top of each ordered chain
-    // is taken verbatim.
+    // probing lives in the resolver (slice 3); the top of each ordered
+    // chain is taken verbatim and probed there.
     if (!orderedVideo.isEmpty() && !orderedAudio.isEmpty())
         return PlaybackSource{QStringLiteral("adaptive_separate"),
                               orderedVideo.first().url,
@@ -262,6 +264,56 @@ std::optional<PlaybackSource> buildPlaybackSource(
         return PlaybackSource{QStringLiteral("adaptive_video_only"),
                               orderedVideo.first().url, {}};
     return std::nullopt;
+}
+
+QStringList hostRotationCandidates(const QString& url)
+{
+    if (!url.contains(QLatin1String("googlevideo.com")))
+        return {url};
+
+    const QUrl parsedUrl(url);
+    if (!parsedUrl.isValid() || parsedUrl.host().isEmpty())
+        return {url};
+
+    // `mn` = comma-separated alternate server tokens (Compose parity). Each
+    // alternates the host's `sn-` token with that server, renumbering the
+    // optional `rrN---` prefix to its 1-based index.
+    const QStringList servers =
+        QUrlQuery(parsedUrl).queryItemValue(QLatin1String("mn"))
+            .split(QLatin1Char(','), Qt::SkipEmptyParts);
+
+    static const QRegularExpression rr(QStringLiteral("^rr\\d+---"));
+    static const QRegularExpression sn(
+        QStringLiteral("sn-[a-z0-9]+-[a-z0-9]+"));
+
+    const QString host = parsedUrl.host();
+    QStringList out;
+    out.append(url);
+    for (int i = 0; i < servers.size(); ++i) {
+        // Strip a trailing ".googlevideo.com" from the server token so it
+        // swaps cleanly into a host that already carries the domain (Compose
+        // naively inserts the FULL server string here, doubling the domain
+        // for rrN--- hosts - masked there only because the original URL wins
+        // the parallel probe first; we build VALID alternates instead).
+        QString token = servers.at(i);
+        if (token.startsWith(QLatin1String("sn-")))
+            token = token.section(QLatin1Char('.'), 0, 0);
+
+        QString altHost = host;
+        altHost.replace(rr,
+                        QStringLiteral("rr%1---").arg(i + 1));
+        altHost.replace(sn, token);
+        if (altHost == host) continue;
+        QUrl alt = parsedUrl;
+        alt.setHost(altHost);
+        out.append(alt.toString());
+    }
+
+    // Preserve order, drop duplicates (Compose `.distinct()`).
+    QStringList distinct;
+    for (const QString& c : std::as_const(out))
+        if (!distinct.contains(c)) distinct.append(c);
+    return distinct;
 }
 
 } // namespace nuvio::trailer

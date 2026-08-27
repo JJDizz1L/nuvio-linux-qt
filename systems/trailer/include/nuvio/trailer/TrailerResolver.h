@@ -1,9 +1,12 @@
 #pragma once
 
-// Slice-2 runtime: drives the pure kernel over the wire (slice-1 scope plus
-// the fallback-key innertube path - watch-page config extraction and
-// reachability probes are parked for slice 3 exactly as documented in the
-// kernel header).
+// Slice-3 runtime: drives the pure kernel over the wire.
+//   * visitor-data/watch-config fetch: one ANDROID player-API call harvests
+//     the session visitor token (responseContext) and threads it into every
+//     request body/header for the session - never fatal on failure.
+//   * host-rotation reachability probing: the chosen googlevideo URLs (video
+//     + optional separate audio) are Range-probed across their `mn` alternates
+//     and the first reachable one is what gets played.
 //
 // Resolution walks the client chain in order; each answered player response
 // is funneled through parseStreamingData and accumulated into shared,
@@ -12,6 +15,8 @@
 
 #include <QObject>
 #include <QString>
+
+class QNetworkAccessManager;
 
 namespace nuvio::trailer {
 
@@ -26,6 +31,22 @@ public:
 signals:
     void trailerResolved(const QString& url, const QString& audioUrl);
     void trailerFailed(const QString& reason);
+
+private:
+    /// Session-wide visitor token (one ANDROID player call, cached). Threads
+    /// into every request body/header once present; empty on failure (the
+    /// fallback API key alone still works, so this is never fatal).
+    QString fetchVisitorData(QNetworkAccessManager& nam,
+                             const QString& videoId);
+
+    /// Walk host-rotation candidates in order and return the first that
+    /// serves a Range probe (sequential-first-success; the resolver is a
+    /// synchronous QEventLoop walk). Non-googlevideo URLs pass through.
+    QString resolveReachableUrlOrNull(QNetworkAccessManager& nam,
+                                      const QString& url);
+    bool isUrlReachable(QNetworkAccessManager& nam, const QString& url);
+
+    QString m_visitorData;
 };
 
 } // namespace nuvio::trailer

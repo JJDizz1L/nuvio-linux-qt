@@ -121,6 +121,37 @@ int main(int argc, char** argv)
               "nothing available -> nullopt");
     }
 
+    {
+        // hostRotationCandidates: non-googlevideo passes through; rrN---
+        // prefix is renumbered and sn- token swapped per `mn` server, deduped.
+        CHECK(hostRotationCandidates(QStringLiteral(
+                  "https://cdn.example.com/v.mp4"))
+                  == QStringList{QStringLiteral("https://cdn.example.com/v.mp4")},
+              "non-googlevideo passthrough");
+        const QStringList rot = hostRotationCandidates(QStringLiteral(
+            "https://rr2---sn-a5s-2goe.googlevideo.com/video/0?mn="
+            "sn-a5s-2goe.googlevideo.com,sn-npoe7n6s.googlevideo.com"));
+        CHECK(rot.size() == 3
+                  && rot.at(0).contains(QLatin1String("rr2---sn-a5s-2goe")),
+              "original first");
+        if (rot.size() == 3) {
+            // server[0] = same sn token -> only the rr prefix renumbers to 1.
+            CHECK(rot.at(1).contains(QLatin1String("rr1---sn-a5s-2goe"))
+                      && !rot.at(1).contains(QLatin1String(".googlevideo.com"
+                                                          ".googlevideo.com")),
+                  "rr prefix replaced by index+1 (no doubled domain)");
+            // server[1] = different sn token, rr renumbers to 2.
+            CHECK(rot.at(2).contains(QLatin1String("rr2---sn-npoe7n6s")),
+                  "sn token swapped for the alternate server");
+        }
+        const QStringList snRot = hostRotationCandidates(QStringLiteral(
+            "https://sn-a5s-2goe.googlevideo.com/video/0?mn="
+            "sn-npoe7n6s.googlevideo.com"));
+        CHECK(snRot.size() == 2
+                  && snRot.at(1).contains(QLatin1String("sn-npoe7n6s")),
+              "sn token swapped for a bare-sn host");
+    }
+
     std::printf(failures ? "TRAILER SUITE FAILURES=%d\n"
                          : "TRAILER SUITE OK (%d failures)\n",
                 failures);
