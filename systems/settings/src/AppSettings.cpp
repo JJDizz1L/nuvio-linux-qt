@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cstdlib>
 
+#include "nuvio/settings/SyncPlayerSettings.h"
 #include <nuvio/settings/PropertiesStore.h>
 
 namespace nuvio::settings {
@@ -278,6 +279,39 @@ void AppSettings::setDiscordEnabled(bool v)
     if (discordEnabled() == v) return;
     m_store->discord.putBoolean(profileScoped("discord_enabled"), v);
     emit discordEnabledChanged();
+}
+
+// ---- remote-profile-sync surface --------------------------------------------
+
+QJsonObject AppSettings::exportPlayerSyncPayload()
+{
+    return PlayerSettingsSync::exportSyncPayload(m_store->player);
+}
+
+bool AppSettings::applyPlayerSyncPayload(const QJsonObject& payload)
+{
+    // Capture current values (getters read through our own cached store),
+    // apply through the SAME instance, then emit only for values that
+    // actually flipped so unaffected QML bindings never churn.
+    const QString preAudio  = preferredAudioLanguage();
+    const QString preSubs   = preferredSubtitleLanguage();
+    const bool    preForced = useForcedSubtitles();
+    const QString preDecoder = decoderMode();
+    const int     preCacheMb = cacheMb();
+
+    const bool touched =
+        PlayerSettingsSync::applyRemotePayload(m_store->player, payload);
+    if (!touched) return false;
+
+    if (preferredAudioLanguage() != preAudio)
+        emit preferredAudioLanguageChanged();
+    if (preferredSubtitleLanguage() != preSubs)
+        emit preferredSubtitleLanguageChanged();
+    if (useForcedSubtitles() != preForced)
+        emit useForcedSubtitlesChanged();
+    if (decoderMode() != preDecoder) emit decoderModeChanged();
+    if (cacheMb() != preCacheMb) emit cacheMbChanged();
+    return true;
 }
 
 } // namespace nuvio::settings

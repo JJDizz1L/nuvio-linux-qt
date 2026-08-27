@@ -21,7 +21,9 @@ class PlayerSettingsSync final {
 public:
     [[nodiscard]] static QJsonObject exportSyncPayload(
         PropertiesStore& playerStore);
-    static void applyRemotePayload(PropertiesStore& playerStore,
+    /// Applies a remote player_settings fragment through THIS instance's own
+    /// stores, persisting once; returns true when any value was written.
+    static bool applyRemotePayload(PropertiesStore& playerStore,
                                    const QJsonObject& payload);
 };
 

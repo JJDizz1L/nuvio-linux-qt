@@ -6,6 +6,7 @@ add_library(nuvio_authsync STATIC
     include/nuvio/authsync/AuthConfig.h   src/AuthConfig.cpp
     include/nuvio/authsync/AuthService.h  src/AuthService.cpp
     include/nuvio/authsync/SyncRpcClient.h src/SyncRpcClient.cpp
+    include/nuvio/authsync/SyncOrchestrator.h src/SyncOrchestrator.cpp
     src/AuthSyncSystem.cpp)
 
 target_include_directories(nuvio_authsync PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
@@ -28,3 +29,7 @@ add_executable(nuvio_sync_rpc_tests tests/SyncRpcClientTests.cpp)
 target_link_libraries(nuvio_sync_rpc_tests PRIVATE nuvio::authsync Qt6::Network)
 nuvio_common_target_props(nuvio_sync_rpc_tests)
 add_test(NAME nuvio_sync_rpc COMMAND nuvio_sync_rpc_tests)
+add_executable(nuvio_sync_orchestrator_tests tests/SyncOrchestratorTests.cpp)
+target_link_libraries(nuvio_sync_orchestrator_tests PRIVATE nuvio::authsync Qt6::Network)
+nuvio_common_target_props(nuvio_sync_orchestrator_tests)
+add_test(NAME nuvio_sync_orchestrator COMMAND nuvio_sync_orchestrator_tests)

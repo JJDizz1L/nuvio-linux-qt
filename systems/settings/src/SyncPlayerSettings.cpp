@@ -61,7 +61,7 @@ QJsonObject PlayerSettingsSync::exportSyncPayload(
     return out;
 }
 
-void PlayerSettingsSync::applyRemotePayload(
+bool PlayerSettingsSync::applyRemotePayload(
     nuvio::settings::PropertiesStore& playerStore, const QJsonObject& payload)
 {
     bool touched = false;
@@ -105,8 +105,12 @@ void PlayerSettingsSync::applyRemotePayload(
         touched = true;
     }
 
-    if (touched) playerStore.persist();
-}
+    if (touched) {
+        playerStore.persist();
+        return true;
+    }
+    return false;
+} // end applyRemotePayload
 
 
 } // namespace nuvio::settings

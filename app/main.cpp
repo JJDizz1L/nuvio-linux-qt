@@ -26,6 +26,7 @@
 #include "nuvio/mpv/MpvQuickItem.h"
 #include "nuvio/mpv/TrackAutoSelector.h"
 #include "nuvio/authsync/AuthService.h"
+#include "nuvio/authsync/SyncOrchestrator.h"
 #include "nuvio/library/AddonRegistry.h"
 #include "nuvio/settings/PropertiesStore.h"
 #include "nuvio/settings/SyncIdentity.h"
@@ -203,6 +204,16 @@ int main(int argc, char* argv[])
                      });
     auth->restoreSession();
     catalog->loadShelves();     // stored tokens -> active or silent refresh
+
+    // Profile-settings sync (P4 leg 4): background startup pull + debounced
+    // push on settings changes. Fully self-guarding: signed-out or
+    // unconfigured endpoints make every operation a silent no-op.
+    auto syncOrch =
+        std::make_unique<nuvio::authsync::SyncOrchestrator>(
+            settings.get(), nuvio::authsync::AuthConfig::load(),
+            [ap = auth.get()] { return ap->accessToken(); });
+    syncOrch->beginObserving();
+    syncOrch->pullNow();
 
     // Discord Rich Presence: opt-in, live-togglable. Content = media title
     // with play timestamps (Compose parity: paused drops the clock, seek >

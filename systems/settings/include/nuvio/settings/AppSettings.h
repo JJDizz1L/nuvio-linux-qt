@@ -9,6 +9,7 @@
 // spelling of the same preference.
 
 #include <QObject>
+#include <QJsonObject>
 
 namespace nuvio::settings {
 
@@ -63,6 +64,15 @@ public:
     void                  setUseForcedSubtitles(bool v);
     [[nodiscard]] bool    discordEnabled() const;
     void                  setDiscordEnabled(bool v);
+
+    /// --- remote-profile-sync surface (leg 4) ---------------------------------
+    /// Current player-settings feature payload (Compose blob v3 fragment).
+    [[nodiscard]] QJsonObject exportPlayerSyncPayload();
+    /// Applies a remote player_settings fragment through THIS instance's own
+    /// stores (snapshot-safety: writing via a foreign PropertiesStore would
+    /// be invisible to our cached views). Emits only the changed* signals
+    /// whose values actually flipped. Returns true when anything changed.
+    bool applyPlayerSyncPayload(const QJsonObject& payload);
 
 signals:
     void darkThemeChanged();
