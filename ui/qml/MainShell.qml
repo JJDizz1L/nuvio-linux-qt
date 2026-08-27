@@ -58,6 +58,18 @@ ApplicationWindow {
         visible: navigation.currentRoute === "library"
     }
 
+    // Playback-session wiring (plan §8 P1): a resolved card lands on the
+    // player route; the harness keeps exclusive play rights in smoke mode.
+    Connections {
+        target: playback
+        function onPlaybackReady(title, url) {
+            if (smokeActive) return
+            navigation.push("video")
+            pageItem.launchMedia(url)
+        }
+        // Unavailable results are surfaced by LibraryPage's toast.
+    }
+
     // Launch-hook used by main.cpp. In smoke mode the HARNESS owns playback
     // (single source of truth); without smoke this is the CLI path and the
     // stack jumps straight to the player route.

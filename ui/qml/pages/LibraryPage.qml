@@ -22,6 +22,48 @@ Item {
         }
     }
 
+    // ---- no-source toast ----------------------------------------------------
+    // Honest negative feedback when every configured addon answered without
+    // a directly playable source. Auto-fades; never blocks navigation.
+    Rectangle {
+        id: toast
+        opacity: 0
+        z: 10
+        radius: Theme.radiusMd
+        color: Theme.chromeScrim
+        width: Math.min(parent ? parent.width - 64 : 320,
+                        toastText.width + 32)
+        height: toastText.height + 18
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.bottom: parent.bottom
+        anchors.bottomMargin: 42
+
+        Text {
+            id: toastText
+            anchors.centerIn: parent
+            color: Theme.textPrimary
+            font.pixelSize: 13
+        }
+        Behavior on opacity {
+            NumberAnimation { duration: Theme.fadeMs }
+        }
+        Timer {
+            id: toastTimer
+            interval: 2600
+            onTriggered: toast.opacity = 0
+        }
+    }
+
+    Connections {
+        target: playback
+        function onPlaybackUnavailable(title) {
+            toastText.text =
+                qsTr("No playable source found for %1").arg(title)
+            toast.opacity = 1
+            toastTimer.restart()
+        }
+    }
+
     // ---- header ------------------------------------------------------------
     Item {
         id: header
@@ -114,14 +156,15 @@ Item {
                                 asynchronous: true
                                 source: "image://poster/" + modelData.poster
                             }
-                            // Card click exercises the live resolution
-                            // pipeline: addon endpoints -> policy -> log.
-                            // Actual launch into the player lands with the
-                            // playback-session module (plan §8 P1).
+                            // Card click launches through the playback
+                            // session: resolver policy -> direct source ->
+                            // video route (or an honest no-source toast).
                             MouseArea {
                                 anchors.fill: parent
                                 onClicked:
-                                    streams.resolve("movie", modelData.id)
+                                    playback.requestPlay(shelfInfo.type,
+                                                         modelData.id,
+                                                         modelData.name)
                             }
                             Text {
                                 anchors.bottom: parent.bottom

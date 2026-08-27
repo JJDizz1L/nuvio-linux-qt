@@ -56,6 +56,14 @@ public:
     /// turn; uncached ones hit the network.
     Q_INVOKABLE void resolve(const QString& type, const QString& imdbId);
 
+    /// True when every configured addon has answered for the key. Lets a
+    /// caller distinguish "resolution finished earlier and resolve() was a
+    /// cache-hit" (must be handled SYNCHRONOUSLY - no further signal will
+    /// fire) from "still waiting on the network". With zero addons
+    /// configured this is trivially true for any key.
+    Q_INVOKABLE bool isComplete(const QString& type,
+                                const QString& imdbId) const;
+
     /// Policy application over one addon's raw body (network path shares).
     /// Policy application over one addon body. key = "type/imdbId".
     void applyAddonStreams(const QString& key, const QString& addonId,

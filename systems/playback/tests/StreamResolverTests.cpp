@@ -76,6 +76,21 @@ int main(int argc, char** argv)
               "torrent-only stays unplayable (no phantom states)");
     }
 
+    { // isComplete mirrors per-key completeness only
+        StreamResolver solo;
+        solo.setAddons(QVariantList{QVariantMap{
+            {"id", "solo"}, {"name", "Solo"},
+            {"url", "https://s.example/manifest.json"}}});
+        CHECK(!solo.isComplete("movie", "tt1"), "nothing answered yet");
+        solo.applyAddonStreams("movie/tt1", "solo", emptyBody);
+        CHECK(solo.isComplete("movie", "tt1"), "answered == expected");
+        CHECK(!solo.isComplete("movie", "tt2"), "other key unaffected");
+
+        StreamResolver none;                    // zero addons configured
+        CHECK(none.isComplete("movie", "anyid"),
+              "zero addons trivially complete (honest empty-best)");
+    }
+
     std::printf(failures ? "STREAM SUITE FAILURES=%d\n"
                          : "STREAM SUITE OK (%d failures)\n",
                 failures);

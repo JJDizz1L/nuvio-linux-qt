@@ -20,6 +20,7 @@
 #include "nuvio/authsync/AuthService.h"
 #include "nuvio/library/AddonRegistry.h"
 #include "nuvio/library/CatalogService.h"
+#include "nuvio/playback/PlaybackSession.h"
 #include "nuvio/playback/StreamResolver.h"
 #include "nuvio/ui/NavigationModel.h"
 #include "nuvio/ui/PreferencesApplier.h"
@@ -144,6 +145,13 @@ int main(int argc, char* argv[])
     auth->restoreSession();
     catalog->loadShelves();     // stored tokens -> active or silent refresh
 
+    // Session wiring: library card intent -> resolver outcome -> player
+    // route. Owns pending-intent state so stale completions never launch
+    // the wrong title (see PlaybackSession.h).
+    auto playbackSession =
+        std::make_unique<nuvio::playback::PlaybackSession>(
+            streamResolver.get());
+
     QQmlApplicationEngine engine;
     QObject::connect(&engine, &QQmlEngine::quit,
                      &app, &QCoreApplication::quit);
@@ -166,6 +174,9 @@ int main(int argc, char* argv[])
     engine.rootContext()->setContextProperty(
         QStringLiteral("streams"), QVariant::fromValue<QObject*>(
                                          streamResolver.get()));
+    engine.rootContext()->setContextProperty(
+        QStringLiteral("playback"), QVariant::fromValue<QObject*>(
+                                        playbackSession.get()));
     engine.rootContext()->setContextProperty(
         QStringLiteral("catalog"), QVariant::fromValue<QObject*>(
                                         catalog.get()));

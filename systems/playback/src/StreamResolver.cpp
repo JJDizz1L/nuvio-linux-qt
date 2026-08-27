@@ -118,6 +118,13 @@ QVariantMap StreamResolver::bestFor(const QString& type,
 int StreamResolver::expectedAddons(const QString&) const
 { return m_addonOrder.size(); }
 
+bool StreamResolver::isComplete(const QString& type,
+                                const QString& imdbId) const
+{
+    const QString key = type + QLatin1Char('/') + imdbId;
+    return arrivedCount(key) >= expectedAddons(key);
+}
+
 int StreamResolver::arrivedCount(const QString& key) const
 { return m_results.value(key).size(); }
 
