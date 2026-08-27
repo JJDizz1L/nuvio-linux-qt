@@ -149,6 +149,13 @@ ApplicationWindow {
                 parent,
                 isEpisode ? parseInt(parts[1], 10) : -1,
                 isEpisode ? parseInt(parts[2], 10) : -1)
+            // Chrome title: episodes carry an "S1 E2 · Title" label.
+            pageItem.mediaTitle = isEpisode
+                ? qsTr("S%1 E%2 · %3")
+                      .arg(parseInt(parts[1], 10))
+                      .arg(parseInt(parts[2], 10))
+                      .arg(title)
+                : title
             pageItem.launchMedia(url, "", resumeMs)
         }
         // Unavailable results are surfaced by LibraryPage's toast.

@@ -8,6 +8,27 @@ Rectangle {
 
     required property var mpv
 
+    // Track lists derived from the mpv track-list (kind-filtered).
+    readonly property var audioTracks: {
+        const out = []
+        for (const t of (mpv ? mpv.tracks : []))
+            if (t.kind === "audio") out.push(t)
+        return out
+    }
+    readonly property var subTracks: {
+        const out = []
+        for (const t of (mpv ? mpv.tracks : []))
+            if (t.kind === "sub") out.push(t)
+        return out
+    }
+    function trackLabel(t) {
+        // "Title (lang)" | "Title" | "lang" | "Track N"
+        if (t.title && t.lang) return t.title + " (" + t.lang + ")"
+        if (t.title) return t.title
+        if (t.lang) return t.lang
+        return qsTr("Track %1").arg(t.id)
+    }
+
     color: Theme.chromeScrim
     radius: Theme.radiusMd
     border.color: Theme.border
@@ -89,6 +110,75 @@ Rectangle {
             text: bar.mpv.formatTime(bar.mpv.durationMs / 1000.0)
             color: Theme.textSecondary
             font.pixelSize: 12
+        }
+
+        // ---- track pickers (audio / subtitle) over the mpv track list ------
+        Button {
+            flat: true
+            enabled: bar.mpv.hasMedia && bar.audioTracks.length > 0
+            contentItem: Text {
+                text: qsTr("Audio")
+                color: enabled ? Theme.textPrimary : Theme.textDisabled
+                font.pixelSize: 14
+                horizontalAlignment: Text.AlignHCenter
+                verticalAlignment: Text.AlignVCenter
+            }
+            onClicked: audioMenu.popup()
+
+            Menu {
+                id: audioMenu
+                Repeater {
+                    model: {
+                        // "Off" + audio tracks (mpv resolves id -> aid).
+                        const list = [{ label: qsTr("Off"), id: 0,
+                                        checked: false }]
+                        for (const t of bar.audioTracks)
+                            list.push({ label: bar.trackLabel(t),
+                                        id: t.id, checked: t.selected })
+                        return list
+                    }
+                    delegate: MenuItem {
+                        required property var modelData
+                        text: (modelData.checked ? "\u2713 " : "   ")
+                              + modelData.label
+                        onTriggered: bar.mpv.setTrack("audio",
+                                                      modelData.id)
+                    }
+                }
+            }
+        }
+
+        Button {
+            flat: true
+            enabled: bar.mpv.hasMedia
+            contentItem: Text {
+                text: qsTr("Subs")
+                color: enabled ? Theme.textPrimary : Theme.textDisabled
+                font.pixelSize: 14
+                horizontalAlignment: Text.AlignHCenter
+                verticalAlignment: Text.AlignVCenter
+            }
+            onClicked: subMenu.popup()
+
+            Menu {
+                id: subMenu
+                Repeater {
+                    model: {
+                        const list = [{ label: qsTr("Off"), id: 0,
+                                        checked: false }]
+                        for (const t of bar.subTracks)
+                            list.push({ label: bar.trackLabel(t),
+                                        id: t.id, checked: t.selected })
+                        return list
+                    }
+                    delegate: MenuItem {
+                        required property var modelData
+                        text: (modelData.checked ? "\u2713 " : "   ")
+                              + modelData.label
+                        onTriggered: bar.mpv.setTrack("sub", modelData.id)
+                    }
+                }
+            }
         }
 
         Slider {

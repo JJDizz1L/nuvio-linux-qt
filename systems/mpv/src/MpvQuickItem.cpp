@@ -90,8 +90,31 @@ void MpvQuickItem::ensureConnections()
         s.eofReached = true;
         applySnapshot(std::move(s));
     }, Qt::QueuedConnection);
-    std::fprintf(stderr, "[nuvio.qt] connections snap=%d eof=%d ctrl=%p\n",
-                 int(okA), int(okB), static_cast<void*>(c));
+    const bool okT = connect(c, &MpvController::trackListChanged, this,
+            [this](const QVector<TrackInfo>& tracks) {
+                QVariantList out;
+                out.reserve(tracks.size());
+                for (const TrackInfo& t : tracks) {
+                    QVariantMap m;
+                    const char* kindName =
+                        t.kind == TrackKind::Audio     ? "audio"
+                        : t.kind == TrackKind::Video    ? "video"
+                        : t.kind == TrackKind::Subtitle ? "sub"
+                                                        : "other";
+                    m.insert(QStringLiteral("kind"),
+                             QString::fromLatin1(kindName));
+                    m.insert(QStringLiteral("id"),   qint64(t.id));
+                    m.insert(QStringLiteral("title"), t.title);
+                    m.insert(QStringLiteral("lang"),  t.lang);
+                    m.insert(QStringLiteral("forced"), t.forced);
+                    m.insert(QStringLiteral("selected"), t.selected);
+                    out.append(m);
+                }
+                m_tracks = out;
+                emit tracksChanged();
+            }, Qt::QueuedConnection);
+    std::fprintf(stderr, "[nuvio.qt] connections snap=%d eof=%d tracks=%d ctrl=%p\n",
+                 int(okA), int(okB), int(okT), static_cast<void*>(c));
 }
 
 void MpvQuickItem::setVolumePercent(int percent)
@@ -154,13 +177,27 @@ void MpvQuickItem::togglePlayPause()
     m_controller->setPaused(!m_cachedSnap.paused);
 }
 
+/// Directive W2: raw forward onto the controller's command queue. mpv is
+/// the single input authority; we never pre-filter beyond emptiness.
 bool MpvQuickItem::sendKey(const QString& mpvKeyName)
 {
     if (!m_controller || mpvKeyName.isEmpty()) return false;
-    // Directive W2: raw forward onto the controller's command queue. mpv is
-    // the single input authority; we never pre-filter beyond emptiness.
     m_controller->enqueueCommand(QStringList{MpvKeyMap::kPress, mpvKeyName});
     return true;
+}
+
+void MpvQuickItem::setTrack(const QString& kind, const int id)
+{
+    if (!m_controller) return;
+    const QString prop =
+        (kind == QLatin1String("audio")) ? QStringLiteral("aid")
+        : (kind == QLatin1String("sub"))  ? QStringLiteral("sid")
+                                          : QString();
+    if (prop.isEmpty()) return;
+    // Explicit selection only (never alang/slang — same doctrine as the
+    // auto-selector); id <= 0 disables the track class.
+    m_controller->setPropertyString(
+        prop, id > 0 ? QString::number(id) : QStringLiteral("no"));
 }
 
 void MpvQuickItem::seekBySeconds(double deltaSec)

@@ -36,6 +36,7 @@ struct TrackInfo {
     QString  codec;
     bool     def    = false;
     bool     forced = false;
+    bool     selected = false;   ///< mpv track-list "selected" flag
 };
 
 // ---- Documented cache-limit math, ported verbatim from the Compose bridge --

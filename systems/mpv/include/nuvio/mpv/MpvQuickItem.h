@@ -30,6 +30,7 @@ class MpvQuickItem : public QQuickFramebufferObject {
     Q_PROPERTY(int       volumePercent READ volumePercent WRITE setVolumePercent NOTIFY volumePercentChanged)
     Q_PROPERTY(QString   hwdecCurrent  READ hwdecCurrent  NOTIFY hwdecCurrentChanged)
     Q_PROPERTY(double    cacheSeconds  READ cacheSeconds  NOTIFY cacheSecondsChanged)
+    Q_PROPERTY(QVariantList tracks READ tracks NOTIFY tracksChanged)
 
 public:
     explicit MpvQuickItem(QQuickItem* parent = nullptr);
@@ -48,6 +49,7 @@ public:
     [[nodiscard]] int     volumePercent() const;
     [[nodiscard]] QString hwdecCurrent()  const;
     [[nodiscard]] double  cacheSeconds()  const;
+    [[nodiscard]] QVariantList tracks() const { return m_tracks; }
 
     // Called by MpvRenderer (scene-graph thread).
     void reportGlVendorToController(const QString& vendorLower);
@@ -95,6 +97,10 @@ public slots:
     /// no-ops there (QML-side app shortcuts stay independent).
     Q_INVOKABLE bool sendKey(const QString& mpvKeyName);
 
+    /// Track selection: `kind` is "audio"|"sub", id <= 0 disables the track
+    /// (mpv `set aid/sid no`). Issues explicit selection, never alang/slang.
+    Q_INVOKABLE void setTrack(const QString& kind, int id);
+
 signals:
     void controllerChanged();
     void hasMediaChanged();
@@ -105,6 +111,7 @@ signals:
     void volumePercentChanged();
     void hwdecCurrentChanged();
     void cacheSecondsChanged();
+    void tracksChanged();
     void doubleClicked();
 
 protected:
@@ -120,6 +127,7 @@ private:
 
     QPointer<MpvController> m_controller;
     PlaybackSnapshot        m_cachedSnap;
+    QVariantList            m_tracks;
     double                  m_volume = 100.0;
     bool                    m_connectionsDone = false;
     std::atomic<bool>       m_statsAttached{false};

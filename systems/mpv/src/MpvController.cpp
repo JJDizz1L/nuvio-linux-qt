@@ -558,6 +558,7 @@ void MpvController::processEvent(mpv_event* ev)
                     t.codec  = map.value(QStringLiteral("codec")).toString();
                     t.def    = map.value(QStringLiteral("default")).toBool();
                     t.forced = map.value(QStringLiteral("forced")).toBool();
+                    t.selected = map.value(QStringLiteral("selected")).toBool();
                     tracks << t;
                 }
             }

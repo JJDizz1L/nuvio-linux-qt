@@ -8,6 +8,10 @@ Item {
     id: page
     focus: true            // media keyboard ownership while playback is up
 
+    // Chrome title for the CURRENT session (set by the shell at launch;
+    // episodes carry an "S1 E2 · Title" label).
+    property string mediaTitle: ""
+
     // `mpvController` resolves from engine context properties — set
     // unconditionally in main.cpp so this binding never sees undefined.
     MpvItem {
@@ -33,11 +37,14 @@ Item {
         case Qt.Key_Enter:  return "Enter"
         default: break
         }
-        // Printable ASCII forwards 1:1 under its display name ("f" -> f).
+        // Printable ASCII forwards 1:1 PRESERVING CASE (mpv bindings are
+        // case-sensitive: "s"=screenshot, "S"=screenshot-each-frame — the
+        // old uppercase mapping silently inverted them).
         if (ev.text.length === 1) {
-            const c = ev.text.toUpperCase().charCodeAt(0)
-            if ((c >= 65 && c <= 90) || (c >= 48 && c <= 57))
-                return ev.text.toUpperCase()
+            const c = ev.text.charCodeAt(0)
+            if ((c >= 65 && c <= 90) || (c >= 97 && c <= 122)
+                || (c >= 48 && c <= 57))
+                return ev.text
         }
         return ""              // everything else: not ours to translate
     }
@@ -165,6 +172,21 @@ Item {
                 .arg(tor.seeds)
                 .arg(tor.peers)
         }
+    }
+
+    // Session title above the bar (chrome-gated like the transport).
+    Text {
+        anchors.bottom: bar.top
+        anchors.bottomMargin: 8
+        anchors.horizontalCenter: parent.horizontalCenter
+        width: Math.min(parent.width - 64, bar.width)
+        horizontalAlignment: Text.AlignHCenter
+        visible: page.idleChrome ? false : (page.mediaTitle.length > 0)
+        text: page.mediaTitle
+        color: Theme.textPrimary
+        font.pixelSize: 15
+        font.weight: Font.DemiBold
+        elide: Text.ElideRight
     }
 
     TransportBar {
