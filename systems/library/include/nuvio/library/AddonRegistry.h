@@ -15,6 +15,8 @@
 #include <QString>
 #include <QVariantList>
 
+#include <QJsonArray>
+
 #include <memory>
 
 #include "nuvio/library/AddonStore.h"
@@ -47,6 +49,13 @@ public:
     Q_INVOKABLE void remove(const QString& id);
     /// Enabled-state toggle persisted to the shared truth store.
     Q_INVOKABLE void setEnabled(int index, bool on);
+
+    // ---- server sync surface (addons-rows leg) ------------------------------
+    /// p_addons rows for sync_push_addons: [{url,name,enabled,sort_order}].
+    [[nodiscard]] QJsonArray exportServerRows() const;
+    /// Applies server rows (url/name/enabled in order); writes truth +
+    /// enabled maps; cached manifests attached where present. No network.
+    void applyServerRows(const QJsonArray& rows);
 
     [[nodiscard]] QVariantList addons() const { return m_addons; }
 

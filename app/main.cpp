@@ -26,6 +26,7 @@
 #include "nuvio/mpv/MpvLog.h"
 #include "nuvio/mpv/MpvQuickItem.h"
 #include "nuvio/mpv/TrackAutoSelector.h"
+#include "nuvio/authsync/AddonsSyncController.h"
 #include "nuvio/authsync/ProgressSyncController.h"
 #include "nuvio/authsync/AuthService.h"
 #include "nuvio/authsync/SyncOrchestrator.h"
@@ -405,6 +406,20 @@ int main(int argc, char* argv[])
                      progressSync.get(),
                      &nuvio::authsync::ProgressSyncController::
                          onWatchedChanged);
+    // Addons rows sync: registry changes -> debounced full-state push;
+    // session activation -> server pull applied into the registry.
+    auto addonsSync =
+        std::make_unique<nuvio::authsync::AddonsSyncController>(
+            addonreg.get(), nuvio::authsync::AuthConfig::load(),
+            [ap = auth.get()] { return ap->accessToken(); });
+    addonsSync->beginObserving();
+    QObject::connect(
+        auth.get(), &nuvio::authsync::AuthService::stateChanged,
+        auth.get(),
+        [as = addonsSync.get(), ap = auth.get()] {
+            if (as && ap->sessionActive()) as->pullNow();
+        });
+    if (auth->sessionActive()) addonsSync->pullNow();
     {
         // One full/delta pull per session activation (initial + re-login).
         bool initialSyncFired = false;

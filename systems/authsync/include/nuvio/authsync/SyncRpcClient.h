@@ -45,6 +45,11 @@ public:
     /// Fires exactly one finished() per call.
     void call(const QString& fnName, const QJsonObject& params);
 
+    /// Table SELECT: GET {base}/rest/v1/<pathAndQuery> (postgrest table
+    /// reads are GETs; same headers as call()).
+    /// pathAndQuery example: "addons?profile_id=eq.1&select=url,name,enabled"
+    void get(const QString& pathAndQuery);
+
 signals:
     /// ok=false carries the HTTP status; response holds the decoded body -
     /// postgrest functions commonly answer with a JSON ARRAY root (or a

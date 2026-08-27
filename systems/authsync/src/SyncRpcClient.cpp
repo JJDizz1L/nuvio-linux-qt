@@ -57,4 +57,28 @@ void SyncRpcClient::call(const QString& fnName, const QJsonObject& params)
     });
 }
 
+void SyncRpcClient::get(const QString& pathAndQuery)
+{
+    QNetworkRequest req{QUrl(QString::fromUtf8(m_cfg.baseUrl) +
+                             QLatin1Char('/') + pathAndQuery)};
+    req.setRawHeader("Accept", "application/json");
+    req.setRawHeader("apikey", m_cfg.anonKey);
+    const QByteArray userJwt = m_token ? m_token() : QByteArray();
+    const QByteArray bearer = !userJwt.isEmpty() ? userJwt : m_cfg.anonKey;
+    if (!bearer.isEmpty())
+        req.setRawHeader("Authorization", "Bearer " + bearer);
+
+    auto* rep = m_nam->get(req);
+    connect(rep, &QNetworkReply::finished, this, [this, rep] {
+        rep->deleteLater();
+        const int status =
+            rep->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+        const QByteArray raw = rep->readAll();
+        const bool ok =
+            rep->error() == QNetworkReply::NoError && status >= 200 &&
+            status < 300;
+        emit finished(ok, status, QJsonDocument::fromJson(raw), raw);
+    });
+}
+
 } // namespace nuvio::authsync

@@ -8,6 +8,7 @@ add_library(nuvio_authsync STATIC
     include/nuvio/authsync/SyncRpcClient.h src/SyncRpcClient.cpp
     include/nuvio/authsync/SyncOrchestrator.h src/SyncOrchestrator.cpp
     include/nuvio/authsync/ProgressSyncController.h src/ProgressSyncController.cpp
+    include/nuvio/authsync/AddonsSyncController.h src/AddonsSyncController.cpp
     src/AuthSyncSystem.cpp)
 
 target_include_directories(nuvio_authsync PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
@@ -15,7 +16,8 @@ target_include_directories(nuvio_authsync PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/inc
 # settings dependency: session persistence rides the shared PropertiesStore
 # (byte-compat with the Compose profile). Sibling-systems link, sanctioned.
 target_link_libraries(nuvio_authsync
-    PUBLIC Qt6::Core Qt6::Network nuvio::settings nuvio::watching)
+    PUBLIC Qt6::Core Qt6::Network nuvio::settings nuvio::watching
+           nuvio::library)
 nuvio_common_target_props(nuvio_authsync)
 add_library(nuvio::authsync ALIAS nuvio_authsync)
 

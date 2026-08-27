@@ -212,4 +212,55 @@ void AddonRegistry::setEnabled(const int index, const bool on)
     emit changed();
 }
 
+QJsonArray AddonRegistry::exportServerRows() const
+{
+    QJsonArray rows;
+    int sortOrder = 0;
+    for (const auto& a : m_addons) {
+        const QVariantMap row = a.toMap();
+        rows.append(QJsonObject{
+            {QStringLiteral("url"),
+             row.value(QStringLiteral("url")).toString()},
+            {QStringLiteral("name"),
+             row.value(QStringLiteral("name")).toString()},
+            {QStringLiteral("enabled"),
+             row.value(QStringLiteral("enabled"), true).toBool()},
+            {QStringLiteral("sort_order"), sortOrder++}});
+    }
+    return rows;
+}
+
+void AddonRegistry::applyServerRows(const QJsonArray& rows)
+{
+    QStringList urls;
+    AddonStore::EnabledMap enabled;
+    for (const auto& v : rows) {
+        const QJsonObject o = v.toObject();
+        const QString url = o.value(QLatin1String("url")).toString();
+        if (url.isEmpty()) continue;
+        urls << url;
+        enabled.insert(url, o.value(QLatin1String("enabled")).toBool(true));
+    }
+
+    AddonStore::saveInstalledUrls(*m_truth, urls);
+    AddonStore::saveEnabledStates(*m_truth, enabled);
+    m_truth->persist();
+
+    m_addons.clear();
+    for (const QString& url : urls) {
+        const QByteArray cached = AddonStore::loadCachedManifest(*m_cache, url);
+        QVariantMap row;
+        if (!cached.isEmpty()) {
+            row = parseManifest(url, cached);
+            if (row.isEmpty()) row = placeholderRow(url);
+        } else {
+            row = placeholderRow(url);
+            fetchManifest(url);
+        }
+        row[QStringLiteral("enabled")] = enabled.value(url, true);
+        m_addons.append(row);
+    }
+    emit changed();
+}
+
 } // namespace nuvio::library
