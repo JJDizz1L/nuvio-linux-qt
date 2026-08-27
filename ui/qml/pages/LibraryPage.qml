@@ -7,20 +7,22 @@ Item {
 
     // Skeleton data: real catalog federation arrives with the library
     // system; these are keyless CDN posters proving the async pipeline.
-    readonly property var shelf: [
-        { t: "The Shawshank Redemption", id: "tt0111161" },
-        { t: "Pulp Fiction",             id: "tt0110912" },
-        { t: "The Matrix",               id: "tt0133093" },
-        { t: "Spirited Away",            id: "tt0245429" },
-        { t: "Parasite",                 id: "tt6751668" },
-        { t: "Mad Max: Fury Road",       id: "tt1392214" },
-        { t: "Blade Runner 2049",        id: "tt1856101" },
-        { t: "Dune",                     id: "tt1160419" },
-        { t: "Everything Everywhere",    id: "tt6710474" },
-        { t: "Oppenheimer",              id: "tt15398776" },
-        { t: "Interstellar",             id: "tt0816692" },
-        { t: "Whiplash",                 id: "tt2582802" }
-    ]
+    // Live catalog: fed by CatalogService (Cinemeta). Loading + error are
+    // first-class states so the grid never lies about what it has.
+    property var shelf: []
+    property bool loading: false
+
+    Component.onCompleted:
+        loading = true,
+        catalog.fetch("movie", "top")
+
+    Connections {
+        target: catalog
+        function onCatalogReady(type, catalogId, items) {
+            loading = false
+            shelf = items
+        }
+    }
 
     // ---- header ------------------------------------------------------------
     Item {
@@ -33,7 +35,7 @@ Item {
         Text {
             anchors.verticalCenter: parent.verticalCenter
             x: Theme.spacingLg
-            text: qsTr("Library")
+            text: library.loading ? qsTr("Library — loading…") : qsTr("Library")
             color: Theme.textPrimary
             font.pixelSize: 22
             font.weight: Font.DemiBold
@@ -55,7 +57,14 @@ Item {
         clip: true
         cellWidth: 160
         cellHeight: 260
-        model: library.shelf
+        model: shelf.length > 0 ? shelf : []
+
+        Text {
+            anchors.centerIn: parent
+            visible: shelf.length === 0 && !library.loading
+            text: qsTr("No items (catalog empty or unreachable)")
+            color: Theme.textDisabled
+        }
 
         ScrollBar.vertical: ScrollBar {}
 
@@ -86,7 +95,7 @@ Item {
                     elide: Text.ElideRight
                     maximumLineCount: 2
                     wrapMode: Text.WrapAnywhere
-                    text: modelData.t
+                    text: modelData.name
                     color: Theme.textPrimary
                     font.pixelSize: 12
                 }

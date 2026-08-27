@@ -18,6 +18,7 @@
 #include "nuvio/mpv/MpvLog.h"
 #include "nuvio/mpv/MpvQuickItem.h"
 #include "nuvio/authsync/AuthService.h"
+#include "nuvio/library/CatalogService.h"
 #include "nuvio/ui/NavigationModel.h"
 #include "nuvio/ui/PreferencesApplier.h"
 #include "nuvio/settings/AppSettings.h"
@@ -96,6 +97,7 @@ int main(int argc, char* argv[])
     auto navigation = std::make_unique<nuvio::ui::NavigationModel>();
     auto auth       = std::make_unique<nuvio::authsync::AuthService>();
     auto settings   = std::make_unique<nuvio::settings::AppSettings>();
+    auto catalog    = std::make_unique<nuvio::library::CatalogService>();
     auth->restoreSession();     // stored tokens -> active or silent refresh
 
     QQmlApplicationEngine engine;
@@ -114,6 +116,9 @@ int main(int argc, char* argv[])
     engine.rootContext()->setContextProperty(
         QStringLiteral("applier"),
         QVariant::fromValue<QObject*>(prefApplier.get()));
+    engine.rootContext()->setContextProperty(
+        QStringLiteral("catalog"), QVariant::fromValue<QObject*>(
+                                        catalog.get()));
     engine.rootContext()->setContextProperty(
         QStringLiteral("auth"), QVariant::fromValue<QObject*>(auth.get()));
     engine.addImageProvider(QStringLiteral("poster"),
