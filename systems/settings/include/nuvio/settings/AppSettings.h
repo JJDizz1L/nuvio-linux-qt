@@ -33,6 +33,9 @@ class AppSettings final : public QObject {
                        preferredSubtitleLanguageChanged)
     Q_PROPERTY(bool useForcedSubtitles READ useForcedSubtitles
                    WRITE setUseForcedSubtitles NOTIFY useForcedSubtitlesChanged)
+    // integrations ("settings" store; Qt-line-local keys, blob parity = P4)
+    Q_PROPERTY(bool discordEnabled READ discordEnabled WRITE setDiscordEnabled
+                   NOTIFY discordEnabledChanged)
 
 public:
     explicit AppSettings(QObject* parent = nullptr);
@@ -58,6 +61,8 @@ public:
     void setPreferredSubtitleLanguage(const QString& v);
     [[nodiscard]] bool    useForcedSubtitles() const;
     void                  setUseForcedSubtitles(bool v);
+    [[nodiscard]] bool    discordEnabled() const;
+    void                  setDiscordEnabled(bool v);
 
 signals:
     void darkThemeChanged();
@@ -67,6 +72,7 @@ signals:
     void preferredAudioLanguageChanged();
     void preferredSubtitleLanguageChanged();
     void useForcedSubtitlesChanged();
+    void discordEnabledChanged();
 
 private:
     class Store;

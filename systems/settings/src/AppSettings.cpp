@@ -18,6 +18,7 @@ constexpr auto kPrefAudio     = "pref_audio_lang";
 constexpr auto kPrefSub       = "pref_sub_lang";
 constexpr auto kPrefSubtitle  = "pref_sub_lang";
 constexpr auto kForcedSubs    = "use_forced_subs";
+constexpr auto kDiscordOn     = "discord_enabled";
 } // namespace
 
 class AppSettings::Store final {
@@ -141,6 +142,18 @@ void AppSettings::setUseForcedSubtitles(bool v)
     if (useForcedSubtitles() == v) return;
     m_store->props.putBoolean(keys::kForcedSubs, v);
     emit useForcedSubtitlesChanged();
+}
+
+bool AppSettings::discordEnabled() const
+{
+    return m_store->props.getBoolean(keys::kDiscordOn).value_or(false);
+}
+
+void AppSettings::setDiscordEnabled(bool v)
+{
+    if (discordEnabled() == v) return;
+    m_store->props.putBoolean(keys::kDiscordOn, v);
+    emit discordEnabledChanged();
 }
 
 } // namespace nuvio::settings

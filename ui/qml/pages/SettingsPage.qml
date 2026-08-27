@@ -107,6 +107,29 @@ Item {
             }
         }
 
+        // ---- integrations: discord ---------------------------------------------
+        Column {
+            width: parent.width
+            spacing: 4
+            Text {
+                text: qsTr("Discord Rich Presence")
+                color: Theme.textPrimary
+                font.pixelSize: 15
+            }
+            Switch {
+                checked: appsettings.discordEnabled
+                onClicked: appsettings.discordEnabled = !appsettings.discordEnabled
+            }
+            Text {
+                text: qsTr("Show what you're watching on your profile. "
+                           + "Connects/disconnects live.")
+                color: Theme.textDisabled
+                font.pixelSize: 11
+                wrapMode: Text.Wrap
+                width: parent.width
+            }
+        }
+
         // ---- torrent: cache size ------------------------------------------------
         Column {
             width: parent.width

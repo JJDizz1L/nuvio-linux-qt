@@ -18,6 +18,7 @@
 #include "bootstrap/ModuleRegistry.h"
 #include "bootstrap/SmokeRunner.h"
 #include "Version.h"                    // generated via configure_file
+#include "nuvio/integrations/DiscordRpc.h"
 #include "nuvio/mpv/MpvController.h"
 #include "nuvio/mpv/MpvLog.h"
 #include "nuvio/mpv/MpvQuickItem.h"
@@ -181,6 +182,32 @@ int main(int argc, char* argv[])
     auth->restoreSession();
     catalog->loadShelves();     // stored tokens -> active or silent refresh
 
+    // Discord Rich Presence: opt-in, live-togglable. Content = media title
+    // with play timestamps (Compose parity: paused drops the clock, seek >
+    // 4s rebuilds, 800ms debounce coalesces position chatter).
+    auto discord = std::make_unique<nuvio::integrations::DiscordPresence>();
+    discord->setClientId(qEnvironmentVariable("NUVIO_DISCORD_CLIENT_ID"));
+    QObject::connect(settings.get(),
+                     &nuvio::settings::AppSettings::discordEnabledChanged,
+                     discord.get(), [dp = discord.get(), sp = settings.get()] {
+                         if (sp->discordEnabled())
+                             QMetaObject::invokeMethod(dp, "connectNow",
+                                                       Qt::QueuedConnection);
+                         else
+                             dp->stop();
+                     });
+    QObject::connect(controller.get(), &nuvio::mpv::MpvController::snapshotChanged,
+                     discord.get(), [dp = discord.get()](nuvio::mpv::PlaybackSnapshot s) {
+                         if (!s.hasMedia()) return;   // browse stays silent
+                         dp->updateProgress(s.positionSec < 0 ? -1.0 : s.positionSec,
+                                            s.durationSec,
+                                            s.paused);
+                     });
+    if (settings->discordEnabled()) {
+        QMetaObject::invokeMethod(discord.get(), "connectNow",
+                                  Qt::QueuedConnection);
+    }
+
     // Session wiring: library card intent -> resolver outcome -> player
     // route. Owns pending-intent state so stale completions never launch
     // the wrong title (see PlaybackSession.h). Torrent-only resolutions
@@ -203,6 +230,13 @@ int main(int argc, char* argv[])
     auto playbackSession =
         std::make_unique<nuvio::playback::PlaybackSession>(
             streamResolver.get(), p2pEngine.get());
+    QObject::connect(playbackSession.get(),
+                     &nuvio::playback::PlaybackSession::sessionChanged,
+                     discord.get(), [dp = discord.get(), ps =
+                                        playbackSession.get()] {
+                         dp->setTitle(ps->currentTitle());
+                     });
+
 
     QQmlApplicationEngine engine;
     QObject::connect(&engine, &QQmlEngine::quit,
