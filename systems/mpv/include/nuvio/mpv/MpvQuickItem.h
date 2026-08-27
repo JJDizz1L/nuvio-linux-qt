@@ -81,7 +81,8 @@ public slots:
     void notifyRenderContextReady();
 
     // ---- QML API ----------------------------------------------------------
-    Q_INVOKABLE void play(const QString& url, const QString& audioUrl = {});
+    Q_INVOKABLE void play(const QString& url, const QString& audioUrl = {},
+                          qint64 startMs = -1);
     Q_INVOKABLE void togglePlayPause();
     Q_INVOKABLE void seekBySeconds(double deltaSec);
     Q_INVOKABLE void seekToSeconds(double absoluteSec);

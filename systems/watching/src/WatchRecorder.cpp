@@ -107,6 +107,26 @@ void WatchRecorder::rebuildModel()
     emit resumeChanged();
 }
 
+qint64 WatchRecorder::resumePositionMsFor(const QString& parentMetaId,
+                                          const int season, const int episode)
+{
+    const std::string id = parentMetaId.toStdString();
+    const std::optional<int> s = season >= 0 ? std::optional<int>(season)
+                                             : std::nullopt;
+    const std::optional<int> e = episode >= 0 ? std::optional<int>(episode)
+                                              : std::nullopt;
+    for (const auto& entry : m_store->loadEntries()) {
+        if (entry.parentMetaId != id || entry.season != s
+            || entry.episode != e)
+            continue;
+        // Resumable only (Compose drops >=90 % rows from resume).
+        if (!entry.isResumable()) return 0;
+        // Guard near-complete positions (< 90 % of duration).
+        return entry.lastPositionMs;
+    }
+    return 0;
+}
+
 QVariantList WatchRecorder::continueWatching() const
 {
     QVariantList out;

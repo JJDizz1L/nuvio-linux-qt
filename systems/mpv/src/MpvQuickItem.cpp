@@ -128,7 +128,8 @@ void MpvQuickItem::applySnapshot(PlaybackSnapshot snap)
 
 // ---- QML API ---------------------------------------------------------------
 
-void MpvQuickItem::play(const QString& url, const QString& audioUrl)
+void MpvQuickItem::play(const QString& url, const QString& audioUrl,
+                        const qint64 startMs)
 {
     if (!m_controller) {
         qCWarning(lcNuvioMpvCtrl, "play() before controller attached");
@@ -141,9 +142,10 @@ void MpvQuickItem::play(const QString& url, const QString& audioUrl)
         qCInfo(lcNuvioMpvCtrl, "parking play() until render context ready");
         m_pendingUrl    = url;
         m_pendingAudio  = audioUrl;
+        m_pendingStartMs = startMs;
         return;
     }
-    m_controller->loadFile(url, audioUrl);
+    m_controller->loadFile(url, audioUrl, startMs);
 }
 
 void MpvQuickItem::togglePlayPause()

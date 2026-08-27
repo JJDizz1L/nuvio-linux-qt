@@ -134,15 +134,22 @@ ApplicationWindow {
             // into parent + season/episode (Compose resume semantics).
             const parts = playback.currentId.split(":")
             const isEpisode = parts.length === 3
+            const parent = isEpisode ? parts[0] : playback.currentId
             watching.beginSession(
                 playback.currentType,
-                isEpisode ? parts[0] : playback.currentId,
+                parent,
                 playback.currentType,
                 playback.currentId, title,
                 isEpisode ? parseInt(parts[1], 10) : -1,
                 isEpisode ? parseInt(parts[2], 10) : -1,
                 "", Date.now())
-            pageItem.launchMedia(url)
+            // Resume from the persisted position (if any resumable row
+            // exists for this exact identity in the shared store).
+            const resumeMs = watching.resumePositionMsFor(
+                parent,
+                isEpisode ? parseInt(parts[1], 10) : -1,
+                isEpisode ? parseInt(parts[2], 10) : -1)
+            pageItem.launchMedia(url, "", resumeMs)
         }
         // Unavailable results are surfaced by LibraryPage's toast.
     }

@@ -217,6 +217,34 @@ int main(int argc, char** argv)
         CHECK(rec.isWatched("series", "tt9", 1, 1),
               "completed session marks watched");
     }
+    { // resumePositionMsFor: identity-scoped, resumable-only
+        QTemporaryDir sd;
+        CHECK(sd.isValid(), "resume lookup temp dir");
+        const QString p = QDir(sd.path()).filePath("watch_progress.properties");
+        const QString w = QDir(sd.path()).filePath("watched.properties");
+        WatchingStore store(p, w, 1);
+        WatchRecorder rec(&store, &app);
+
+        WatchEntry e;
+        e.contentType = "movie"; e.parentMetaId = "tt77"; e.parentMetaType = "movie";
+        e.videoId = "tt77"; e.title = "Movie"; e.lastPositionMs = 123'456;
+        e.durationMs = 1'000'000; e.lastUpdatedEpochMs = nowMs(); e.source = "local";
+        store.upsert(e);
+
+        CHECK(rec.resumePositionMsFor("tt77") == 123'456,
+              "movie resume position found");
+        CHECK(rec.resumePositionMsFor("tt78") == 0, "unknown id -> 0");
+        CHECK(rec.resumePositionMsFor("tt77", -1, -1) == 123'456,
+              "explicit -1/-1 matches movie");
+        CHECK(rec.resumePositionMsFor("tt77", 1, 1) == 0,
+              "episode query misses movie row");
+
+        // completed rows are not resumable
+        WatchEntry done = e; done.isCompleted = true; done.progressPercent = 100.0f;
+        store.upsert(done);
+        CHECK(rec.resumePositionMsFor("tt77") == 0,
+              "completed row yields no resume");
+    }
 
     std::printf(failures ? "WATCHING SUITE FAILURES=%d\n"
                          : "WATCHING SUITE OK (%d failures)\n",

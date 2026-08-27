@@ -50,10 +50,11 @@ Item {
     /**
      * Entry point from the shell's playFromLaunch hook. `audioUrl` is the
      * optional separate-audio stream (trailer adaptive_separate path); empty
-     * means the source is muxed and mpv plays its own audio.
+     * means the source is muxed and mpv plays its own audio. `startMs` is the
+     * optional resume position (watch-state); -1/0 means play from the start.
      */
-    function launchMedia(source, audioUrl) {
-        mpv.play(source, audioUrl || "")
+    function launchMedia(source, audioUrl, startMs) {
+        mpv.play(source, audioUrl || "", startMs || -1)
     }
 
     // ---- watch-state recorder (systems/watching) ------------------------------

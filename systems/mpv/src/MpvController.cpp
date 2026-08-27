@@ -106,10 +106,16 @@ void MpvController::loadFile(const QString& url, const QString& audioFile,
            static_cast<long long>(startMillis));
     if (!audioFile.isEmpty())
         setPropertyString(QStringLiteral("audio-file"), audioFile);
-    if (startMillis > 0)
-        setPropertyString(QStringLiteral("play-start"),
-                          QString::number(startMillis / 1000.0));
-    enqueueCommand({QStringLiteral("loadfile"), url});
+    if (startMillis > 0) {
+        // Resume: mpv has NO "play-start" option (the old spelling was a
+        // silent no-op); the start position rides the loadfile options field.
+        enqueueCommand({QStringLiteral("loadfile"), url,
+                        QStringLiteral("replace"),
+                        QStringLiteral("start=+%1")
+                            .arg(QString::number(startMillis / 1000.0, 'f', 3))});
+    } else {
+        enqueueCommand({QStringLiteral("loadfile"), url});
+    }
     setPaused(false);
 }
 

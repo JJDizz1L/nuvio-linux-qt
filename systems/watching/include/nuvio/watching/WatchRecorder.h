@@ -54,6 +54,11 @@ public:
         /// Reload the model from disk (e.g. on profile switch / app foreground).
     Q_INVOKABLE void refresh();
 
+    /// Resume position (ms) for a content identity, or 0 when none resumable.
+    /// Mirrors Compose resume semantics: entry must be resumable (< 90 %).
+    Q_INVOKABLE qint64 resumePositionMsFor(const QString& parentMetaId,
+                                           int season = -1, int episode = -1);
+
     QVariantList continueWatching() const;
 
     bool hasResume() const;
