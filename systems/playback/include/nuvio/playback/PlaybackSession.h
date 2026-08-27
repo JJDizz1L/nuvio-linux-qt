@@ -37,6 +37,8 @@ class PlaybackSession final : public QObject {
     Q_OBJECT
     Q_PROPERTY(QString currentTitle READ currentTitle NOTIFY sessionChanged)
     Q_PROPERTY(QString currentUrl   READ currentUrl   NOTIFY sessionChanged)
+    Q_PROPERTY(QString currentType  READ currentType  NOTIFY sessionChanged)
+    Q_PROPERTY(QString currentId    READ currentId    NOTIFY sessionChanged)
     Q_PROPERTY(bool    hasSession   READ hasSession   NOTIFY sessionChanged)
 
 public:
@@ -53,6 +55,8 @@ public:
 
     [[nodiscard]] QString currentTitle() const { return m_title; }
     [[nodiscard]] QString currentUrl()   const { return m_url; }
+    [[nodiscard]] QString currentType()  const { return m_type; }
+    [[nodiscard]] QString currentId()    const { return m_id; }
     [[nodiscard]] bool    hasSession()   const { return !m_url.isEmpty(); }
 
 signals:
@@ -81,6 +85,8 @@ private:
     // Last accepted session payload (drives QML properties).
     QString m_title;
     QString m_url;
+    QString m_type;
+    QString m_id;
 };
 
 } // namespace nuvio::playback

@@ -60,6 +60,7 @@ add_subdirectory(systems/settings)      # first: authsync stores sessions in it
 add_subdirectory(systems/platform)
 add_subdirectory(systems/trailer)
 add_subdirectory(systems/library)
+add_subdirectory(systems/watching)        # watch-state foundation (P1)
 add_subdirectory(systems/authsync)
 add_subdirectory(systems/tracking)
 add_subdirectory(systems/integrations)

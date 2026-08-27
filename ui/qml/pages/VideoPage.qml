@@ -56,6 +56,26 @@ Item {
         mpv.play(source, audioUrl || "")
     }
 
+    // ---- watch-state recorder (systems/watching) ------------------------------
+    // 1 Hz position pump: debounced >=10 s advances persist resume rows into
+    // the Compose-shared watch_progress store; reaching >= 90 % completes the
+    // session (marks watched + drops the resume row). Leaving the route
+    // abandons the session, persisting the last >= 1 s position.
+    Timer {
+        interval: 1000
+        running: mpv.hasMedia && !mpv.paused
+        repeat: true
+        onTriggered: {
+            if (mpv.durationMs > 0 &&
+                mpv.positionMs >= mpv.durationMs * 0.9) {
+                watching.endSessionCompleted(Date.now())
+            } else {
+                watching.publishPosition(mpv.positionMs, mpv.durationMs)
+            }
+        }
+    }
+    onVisibleChanged: if (!visible) watching.endSessionAbandoned()
+
     // ---- chrome auto-hide --------------------------------------------------
     // Display-layer convenience ONLY (plan directive: nothing here may
     // influence media timing). A coarse clock bumps `now` purely so the two

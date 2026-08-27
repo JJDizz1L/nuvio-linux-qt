@@ -39,6 +39,8 @@
 #include "nuvio/settings/AppSettings.h"
 #include "nuvio/settings/PropertiesStore.h"
 #include "nuvio/trailer/TrailerResolver.h"
+#include "nuvio/watching/WatchRecorder.h"
+#include "nuvio/watching/WatchingStore.h"
 #include "nuvio/ui/PosterProvider.h"
 #include "nuvio/ui/UiBootstrap.h"
 
@@ -307,6 +309,17 @@ int main(int argc, char* argv[])
     engine.rootContext()->setContextProperty(
         QStringLiteral("mpvController"), QVariant::fromValue<QObject*>(
                                              controller.get()));
+    // Watch-state foundation (systems/watching): Compose-parity resume +
+    // watched persistence in the SHARED profile stores (watch_progress /
+    // watched .properties, profile key 1) so both builds read each other.
+    auto watchingStore =
+        std::make_unique<nuvio::watching::WatchingStore>(
+            nuvio::watching::kDefaultProfileId);
+    auto watchRecorder = std::make_unique<nuvio::watching::WatchRecorder>(
+        watchingStore.get());
+    engine.rootContext()->setContextProperty(
+        QStringLiteral("watching"), QVariant::fromValue<QObject*>(
+                                        watchRecorder.get()));
 
     const QUrl shellUrl(QStringLiteral("qrc:/nuvio/qml/MainShell.qml"));
     engine.load(shellUrl);

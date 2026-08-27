@@ -24,12 +24,14 @@ PlaybackSession::PlaybackSession(StreamResolver* resolver,
     if (m_p2p) {
         // The engine emits QUEUED (never re-entrantly), so token checks
         // against m_activeToken are race-free.
-        connect(m_p2p, &nuvio::p2p::P2pEngine::streamReady, this,
+                connect(m_p2p, &nuvio::p2p::P2pEngine::streamReady, this,
                 [this](quint64 token, const QString& url) {
                     if (!m_awaitingP2p || token != m_activeToken) return;
                     m_awaitingP2p = false;
                     m_title = m_pendingTitle;
                     m_url   = url;
+                    m_type  = m_pendingType;
+                    m_id    = m_pendingId;
                     emit sessionChanged();
                     emit playbackReady(m_title, m_url);
                 });
@@ -72,6 +74,8 @@ void PlaybackSession::decide()
     if (!best.isEmpty() && !url.isEmpty()) {
         m_title = sourceTitle.isEmpty() ? m_pendingTitle : sourceTitle;
         m_url   = url;
+        m_type  = m_pendingType;
+        m_id    = m_pendingId;
         emit sessionChanged();
         emit playbackReady(m_title, m_url);
         return;
