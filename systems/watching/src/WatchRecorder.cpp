@@ -59,6 +59,29 @@ void WatchRecorder::publishPosition(const qint64 positionMs,
     }
 }
 
+void WatchRecorder::markWatched(const QString& type, const QString& id,
+                                int season, int episode, qint64 nowEpochMs)
+{
+    const auto s = season < 0 ? std::optional<int>() : std::optional<int>(season);
+    const auto e = episode < 0 ? std::optional<int>() : std::optional<int>(episode);
+    m_store->markWatched(type.toStdString(), id.toStdString(), s, e,
+                         nowEpochMs);
+    // Compose parity: marking a movie watched drops its resume row.
+    m_store->remove(nuvio::watching::buildProgressKey(id.toStdString(), s, e));
+    rebuildModel();
+    emit watchedChanged();
+}
+
+void WatchRecorder::unmarkWatched(const QString& type, const QString& id,
+                                  int season, int episode)
+{
+    const auto s = season < 0 ? std::optional<int>() : std::optional<int>(season);
+    const auto e = episode < 0 ? std::optional<int>() : std::optional<int>(episode);
+    m_store->unmarkWatched(type.toStdString(), id.toStdString(), s, e);
+    rebuildModel();
+    emit watchedChanged();
+}
+
 void WatchRecorder::endSessionCompleted(const qint64 nowEpochMs)
 {
     if (!m_hasSession) return;

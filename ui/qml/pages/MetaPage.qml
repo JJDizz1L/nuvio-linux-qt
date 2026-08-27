@@ -215,9 +215,22 @@ Item {
             Button {
                 visible: !isSeries && imdbId.length > 0
                 text: watching.isWatched(type, imdbId)
-                      ? qsTr("\u2713  Watched")
+                      ? qsTr("\u2713  Watched \u2014 tap to undo")
                       : qsTr("\u25B6  Play")
-                onClicked: detail.playMovie()
+                onClicked: {
+                    if (watching.isWatched(type, imdbId))
+                        watching.unmarkWatched(type, imdbId, -1, -1)
+                    else
+                        detail.playMovie()
+                }
+            }
+            Button {
+                visible: !isSeries && imdbId.length > 0
+                         && !watching.isWatched(type, imdbId)
+                flat: true
+                text: qsTr("\u2713  Mark watched")
+                onClicked: watching.markWatched(type, imdbId, -1, -1,
+                                                Date.now())
             }
 
             Button {

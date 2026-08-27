@@ -54,6 +54,13 @@ public:
         /// Reload the model from disk (e.g. on profile switch / app foreground).
     Q_INVOKABLE void refresh();
 
+    /// Manual watched toggles (QML MetaPage button). Marks drop the resume
+    /// row (Compose parity); both emit watchedChanged for the sync leg.
+    Q_INVOKABLE void markWatched(const QString& type, const QString& id,
+                                 int season, int episode, qint64 nowEpochMs);
+    Q_INVOKABLE void unmarkWatched(const QString& type, const QString& id,
+                                   int season, int episode);
+
     /// Resume position (ms) for a content identity, or 0 when none resumable.
     /// Mirrors Compose resume semantics: entry must be resumable (< 90 %).
     Q_INVOKABLE qint64 resumePositionMsFor(const QString& parentMetaId,
