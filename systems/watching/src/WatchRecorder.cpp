@@ -179,8 +179,12 @@ QVariantList WatchRecorder::continueWatching() const
     };
 
     QVariantList out;
-    for (const auto& e : m_store->loadEntries()) {
-        if (!e.isResumable()) continue;
+    // Compose home surface parity: the pure policy (newest-per-key dedupe,
+    // resumable-only, freshness-descending) with the 20-item cap, replacing
+    // the raw store order this surface used to iterate.
+    for (const auto& e :
+         continueWatchingSelection(m_store->loadEntries(),
+                                   kContinueWatchingLimit)) {
         QVariantMap m;
         m.insert("title", QString::fromStdString(e.title));
         m.insert("poster", e.poster ? QString::fromStdString(*e.poster) : QString());

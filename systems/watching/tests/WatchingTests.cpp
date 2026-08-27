@@ -259,6 +259,36 @@ int main(int argc, char** argv)
             }
         }
     }
+    { // continueWatching surface routes through continueWatchingSelection
+      // (newest-first + limit cap live on the recorder, not just policy)
+        QTemporaryDir sd;
+        CHECK(sd.isValid(), "selection temp dir");
+        const QString p = QDir(sd.path()).filePath("watch_progress.properties");
+        const QString w = QDir(sd.path()).filePath("watched.properties");
+        WatchingStore store(p, w, 1);
+        WatchRecorder rec(&store, &app);
+
+        // 25 resumable rows with strictly increasing freshness.
+        for (int i = 0; i < 25; ++i) {
+            WatchEntry e;
+            e.contentType = "movie";
+            e.parentMetaId = QString("tt%1").arg(100 + i).toStdString();
+            e.parentMetaType = "movie";
+            e.videoId = e.parentMetaId;
+            e.title = "M" + std::to_string(i);
+            e.lastPositionMs = 60'000;
+            e.durationMs = 1'800'000;
+            e.lastUpdatedEpochMs = nowMs() + i;
+            e.source = "local";
+            store.upsert(e);
+        }
+        const auto cw = rec.continueWatching();
+        CHECK(cw.size() == 20, "surface capped at 20 rows");
+        CHECK(cw.front().toMap().value("id") == QLatin1String("tt124"),
+              "newest row first");
+        CHECK(cw.last().toMap().value("id") == QLatin1String("tt105"),
+              "cap drops the oldest rows, not the newest");
+    }
     { // resumePositionMsFor: identity-scoped, resumable-only
         QTemporaryDir sd;
         CHECK(sd.isValid(), "resume lookup temp dir");
