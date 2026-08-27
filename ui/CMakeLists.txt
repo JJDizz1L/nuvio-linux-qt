@@ -19,6 +19,7 @@ qt_add_resources(nuvio_ui nuvio_qml
         qml/pages/HomePage.qml
         qml/pages/HomePage.qml
         qml/pages/WelcomePage.qml
+        qml/pages/AddonsPage.qml
         qml/pages/LibraryPage.qml
         qml/pages/SettingsPage.qml
         qml/components/TransportBar.qml)

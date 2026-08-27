@@ -18,6 +18,7 @@
 #include "nuvio/mpv/MpvLog.h"
 #include "nuvio/mpv/MpvQuickItem.h"
 #include "nuvio/authsync/AuthService.h"
+#include "nuvio/library/AddonRegistry.h"
 #include "nuvio/library/CatalogService.h"
 #include "nuvio/ui/NavigationModel.h"
 #include "nuvio/ui/PreferencesApplier.h"
@@ -98,6 +99,8 @@ int main(int argc, char* argv[])
     auto auth       = std::make_unique<nuvio::authsync::AuthService>();
     auto settings   = std::make_unique<nuvio::settings::AppSettings>();
     auto catalog    = std::make_unique<nuvio::library::CatalogService>();
+    auto addonreg   = std::make_unique<nuvio::library::AddonRegistry>();
+    addonreg->load();
     auth->restoreSession();
     catalog->loadShelves();     // stored tokens -> active or silent refresh
 
@@ -117,6 +120,9 @@ int main(int argc, char* argv[])
     engine.rootContext()->setContextProperty(
         QStringLiteral("applier"),
         QVariant::fromValue<QObject*>(prefApplier.get()));
+    engine.rootContext()->setContextProperty(
+        QStringLiteral("addons"), QVariant::fromValue<QObject*>(
+                                       addonreg.get()));
     engine.rootContext()->setContextProperty(
         QStringLiteral("catalog"), QVariant::fromValue<QObject*>(
                                         catalog.get()));

@@ -49,6 +49,10 @@ ApplicationWindow {
         anchors.fill: parent
         visible: navigation.currentRoute === "settings"
     }
+    Pages.AddonsPage {
+        anchors.fill: parent
+        visible: navigation.currentRoute === "addons"
+    }
     Pages.LibraryPage {
         anchors.fill: parent
         visible: navigation.currentRoute === "library"
