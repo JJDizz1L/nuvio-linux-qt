@@ -114,6 +114,24 @@ Item {
                                 asynchronous: true
                                 source: "image://poster/" + modelData.poster
                             }
+                            // Watched badge (shared Compose store): a small
+                            // check overlay when this movie is fully watched.
+                            Rectangle {
+                                visible: watching.isWatched(shelfInfo.type,
+                                                            modelData.id)
+                                anchors.top: parent.top
+                                anchors.right: parent.right
+                                anchors.margins: 6
+                                width: 22; height: 22
+                                radius: 11
+                                color: Theme.chromeScrim
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: "\u2713"
+                                    color: Theme.accent
+                                    font.pixelSize: 13
+                                }
+                            }
                             // Card click opens the DETAIL route; playback
                             // intent moves to the meta page's Play/episode
                             // actions (which funnel through the same

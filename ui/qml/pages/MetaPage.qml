@@ -159,7 +159,9 @@ Item {
 
             Button {
                 visible: !isSeries && imdbId.length > 0
-                text: qsTr("▶  Play")
+                text: watching.isWatched(type, imdbId)
+                      ? qsTr("\u2713  Watched")
+                      : qsTr("\u25B6  Play")
                 onClicked: detail.playMovie()
             }
 
@@ -251,7 +253,10 @@ Item {
                         anchors.right: parent.right
                         anchors.rightMargin: Theme.spacingMd
                         anchors.verticalCenter: parent.verticalCenter
-                        text: "\u25B6"
+                        text: watching.isWatched(detail.type, detail.imdbId,
+                                                 modelData.season,
+                                                 modelData.episode)
+                              ? "\u2713" : "\u25B6"
                         color: Theme.accent
                         font.pixelSize: 14
                     }

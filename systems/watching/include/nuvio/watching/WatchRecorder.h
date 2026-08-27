@@ -65,8 +65,8 @@ public:
     QString resumeTitle() const;
     qint64 resumePositionMs() const;
 
-    bool isWatched(const QString& type, const QString& id,
-                   int season = -1, int episode = -1) const;
+    Q_INVOKABLE bool isWatched(const QString& type, const QString& id,
+                               int season = -1, int episode = -1) const;
 
 signals:
     void continueWatchingChanged();
