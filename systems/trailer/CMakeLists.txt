@@ -12,3 +12,8 @@ add_executable(nuvio_trailer_tests tests/TrailerKernelTests.cpp)
 target_link_libraries(nuvio_trailer_tests PRIVATE nuvio::trailer)
 nuvio_common_target_props(nuvio_trailer_tests)
 add_test(NAME nuvio_trailer COMMAND nuvio_trailer_tests)
+
+add_executable(nuvio_trailer_resolver_tests tests/TrailerResolverTests.cpp)
+target_link_libraries(nuvio_trailer_resolver_tests PRIVATE nuvio::trailer)
+nuvio_common_target_props(nuvio_trailer_resolver_tests)
+add_test(NAME nuvio_trailer_resolver COMMAND nuvio_trailer_resolver_tests)

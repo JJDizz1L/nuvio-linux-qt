@@ -6,6 +6,7 @@
 #include <cstring>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QMetaObject>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QNetworkRequest>
@@ -13,6 +14,7 @@
 #include <QUrl>
 #include <QUrlQuery>
 #include <cstdio>
+#include <thread>
 
 namespace nuvio::trailer {
 
@@ -47,13 +49,10 @@ TrailerResolver::TrailerResolver(QObject* parent) : QObject(parent) {}
 QString TrailerResolver::fetchVisitorData(QNetworkAccessManager& nam,
                                           const QString& videoId)
 {
-    if (!m_visitorData.isEmpty())
-        return m_visitorData;
-
     // One ANDROID player-API call harvests the session visitor token from
     // responseContext (Compose fetchWatchConfig parity; watch-page HTML is
-    // 429-gated for non-browser clients). Non-fatal on failure - the
-    // fallback API key path still works without it.
+    // 429-gated for non-browser clients). Pure fetcher: caching happens in the
+    // worker. Non-fatal - the fallback API key path works without a token.
     const YouTubeClient* android = nullptr;
     for (const auto& c : clients())
         if (std::strcmp(c.key, "android") == 0) { android = &c; break; }
@@ -82,9 +81,7 @@ QString TrailerResolver::fetchVisitorData(QNetworkAccessManager& nam,
     }
     std::fprintf(stderr, "trailer: visitor-data android %s\n",
                  visitor.isEmpty() ? "missing" : "ok");
-    if (!visitor.isEmpty())
-        m_visitorData = visitor;
-    return m_visitorData;
+    return visitor;
 }
 
 bool TrailerResolver::isUrlReachable(QNetworkAccessManager& nam,
@@ -164,9 +161,30 @@ void TrailerResolver::resolveForKey(const QString& keyOrUrl)
         emit trailerFailed(QStringLiteral("invalid YouTube url"));
         return;
     }
+    if (m_resolving) return;             // one in-flight resolution only
+    m_resolving = true;
+    emit resolvingChanged();
+    std::thread([this, videoId] { runResolveWorker(videoId); }).detach();
+}
 
-    QNetworkAccessManager nam;
-    const QString visitorData = fetchVisitorData(nam, videoId);
+void TrailerResolver::runResolveWorker(const QString& videoId)
+{
+    QNetworkAccessManager nam;           // worker-thread NAM
+
+    // Visitor token: session cache (worker-written + main-read via the
+    // in-flight single-worker gate), otherwise one ANDROID fetch.
+    QString visitor;
+    {
+        std::lock_guard<std::mutex> g(m_cacheMutex);
+        visitor = m_visitorData;
+    }
+    if (visitor.isEmpty()) {
+        visitor = fetchVisitorData(nam, videoId);
+        if (!visitor.isEmpty()) {
+            std::lock_guard<std::mutex> g(m_cacheMutex);
+            m_visitorData = visitor;
+        }
+    }
 
     StreamingBuckets merged;
     const auto& chain = clients();
@@ -176,11 +194,10 @@ void TrailerResolver::resolveForKey(const QString& keyOrUrl)
             "https://www.youtube.com/youtubei/v1/player?key=")
             + fallbackInnertubeApiKey())};
         for (const auto& [name, value] :
-             playerRequestHeaders(client, visitorData))
+             playerRequestHeaders(client, visitor))
             req.setRawHeader(name.toUtf8(), value.toUtf8());
 
-        const QByteArray body = playerRequestBody(client, videoId,
-                                                  visitorData);
+        const QByteArray body = playerRequestBody(client, videoId, visitor);
         QNetworkReply* rep = blockingRequest(nam, req, &body,
                                              kRequestTimeoutMs);
 
@@ -227,23 +244,36 @@ void TrailerResolver::resolveForKey(const QString& keyOrUrl)
         orderSeparate(merged.progressive), orderSeparate(merged.video),
         orderSeparate(merged.audio), merged.hlsManifestUrl);
 
-    if (!source.has_value()) {
-        emit trailerFailed(QStringLiteral("no reachable streams"));
-        return;
+    bool ok = source.has_value();
+    QString videoUrl, audioUrl, reason;
+    if (ok) {
+        // Host-rotation probe the chosen URLs (slice 3): a googlevideo
+        // primary that won't serve is swapped for an `mn` alternate.
+        videoUrl = resolveReachableUrlOrNull(nam, source->videoUrl);
+        if (videoUrl.isEmpty()) {
+            ok = false;
+            reason = QStringLiteral("no reachable streams");
+        } else {
+            audioUrl = source->audioUrl;
+            if (!audioUrl.isEmpty())
+                audioUrl = resolveReachableUrlOrNull(nam, audioUrl);
+        }
+    } else {
+        reason = QStringLiteral("no reachable streams");
     }
 
-    // Host-rotation probe the chosen URLs (slice 3): a googlevideo primary
-    // that won't serve is swapped for an `mn` alternate before playback.
-    const QString videoUrl = resolveReachableUrlOrNull(nam, source->videoUrl);
-    QString audioUrl = source->audioUrl;
-    if (!audioUrl.isEmpty())
-        audioUrl = resolveReachableUrlOrNull(nam, audioUrl);
-
-    if (videoUrl.isEmpty()) {
-        emit trailerFailed(QStringLiteral("no reachable streams"));
-        return;
-    }
-    emit trailerResolved(videoUrl, audioUrl);
+    // Marshal the terminal signal (and resolving=false) back on the QML
+    // thread. Everything captured here is a by-value copy, safe from the
+    // worker's teardown.
+    QMetaObject::invokeMethod(
+        this,
+        [this, ok, videoUrl, audioUrl, reason] {
+            if (ok)      emit trailerResolved(videoUrl, audioUrl);
+            else         emit trailerFailed(reason);
+            m_resolving = false;
+            emit resolvingChanged();
+        },
+        Qt::QueuedConnection);
 }
 
 } // namespace nuvio::trailer

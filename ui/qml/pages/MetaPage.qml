@@ -165,7 +165,8 @@ Item {
 
             Button {
                 visible: youtubeTrailer !== null
-                text: qsTr("▶  Trailer")
+                text: trailer.resolving ? qsTr("Resolving…") : qsTr("▶  Trailer")
+                enabled: !trailer.resolving
                 onClicked: detail.playTrailer()
             }
 

@@ -16,23 +16,37 @@
 #include <QObject>
 #include <QString>
 
+#include <mutex>
+
 class QNetworkAccessManager;
 
 namespace nuvio::trailer {
 
 class TrailerResolver final : public QObject {
     Q_OBJECT
+    Q_PROPERTY(bool resolving READ isResolving NOTIFY resolvingChanged)
 public:
     explicit TrailerResolver(QObject* parent = nullptr);
 
     /// Accepts a bare video key or any recognizable YouTube URL form.
+    /// Returns immediately; results arrive via trailerResolved/trailerFailed
+    /// (resolution runs on a worker thread so the QML thread never blocks).
     Q_INVOKABLE void resolveForKey(const QString& keyOrUrl);
+
+    [[nodiscard]] bool isResolving() const { return m_resolving; }
 
 signals:
     void trailerResolved(const QString& url, const QString& audioUrl);
     void trailerFailed(const QString& reason);
+    void resolvingChanged();
 
 private:
+    /// Runs on the worker thread: the full synchronous walk (visitor-data
+    /// fetch -> client chain -> source policy -> host-rotation probes) builds
+    /// locals, then QMetaObject::invokeMethod(QueuedConnection) delivers the
+    /// terminal signal + m_resolving=false back on the QML thread.
+    void runResolveWorker(const QString& videoId);
+
     /// Session-wide visitor token (one ANDROID player call, cached). Threads
     /// into every request body/header once present; empty on failure (the
     /// fallback API key alone still works, so this is never fatal).
@@ -40,12 +54,14 @@ private:
                              const QString& videoId);
 
     /// Walk host-rotation candidates in order and return the first that
-    /// serves a Range probe (sequential-first-success; the resolver is a
-    /// synchronous QEventLoop walk). Non-googlevideo URLs pass through.
+    /// serves a Range probe (sequential-first-success). Non-googlevideo URLs
+    /// pass through.
     QString resolveReachableUrlOrNull(QNetworkAccessManager& nam,
                                       const QString& url);
     bool isUrlReachable(QNetworkAccessManager& nam, const QString& url);
 
+    bool m_resolving = false;        // read/written on the QML thread only
+    mutable std::mutex m_cacheMutex; // guards m_visitorData (worker-written)
     QString m_visitorData;
 };
 
