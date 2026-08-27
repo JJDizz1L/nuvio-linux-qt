@@ -19,6 +19,7 @@
 #include "bootstrap/SmokeRunner.h"
 #include "Version.h"                    // generated via configure_file
 #include "nuvio/integrations/DiscordRpc.h"
+#include "nuvio/integrations/MprisService.h"
 #include "nuvio/integrations/ScreensaverInhibit.h"
 #include "nuvio/mpv/MpvController.h"
 #include "nuvio/mpv/MpvLog.h"
@@ -210,17 +211,6 @@ int main(int argc, char* argv[])
                                   Qt::QueuedConnection);
     }
 
-    // Screensaver inhibit tracks the PLAYING state (parity: acquire on
-    // media+unpaused, release on pause/end/teardown).
-    auto screensaver = std::make_unique<nuvio::integrations::ScreensaverInhibit>();
-    QObject::connect(controller.get(), &nuvio::mpv::MpvController::snapshotChanged,
-                     screensaver.get(), [ss = screensaver.get()](nuvio::mpv::PlaybackSnapshot s) {
-                         if (s.hasMedia() && !s.paused) ss->acquire();
-                         else ss->release();
-                     });
-    QObject::connect(controller.get(), &nuvio::mpv::MpvController::reachedEnd,
-                     screensaver.get(), &nuvio::integrations::ScreensaverInhibit::release);
-
     // Session wiring: library card intent -> resolver outcome -> player
     // route. Owns pending-intent state so stale completions never launch
     // the wrong title (see PlaybackSession.h). Torrent-only resolutions
@@ -243,6 +233,24 @@ int main(int argc, char* argv[])
     auto playbackSession =
         std::make_unique<nuvio::playback::PlaybackSession>(
             streamResolver.get(), p2pEngine.get());
+    // MPRIS: desktop media keys / playerctl / shell widgets drive the same
+    // queued command surface as everything else (new capability, plan P3).
+    auto mpris = std::make_unique<nuvio::integrations::MprisService>(
+        controller.get(), playbackSession.get());
+    mpris->start();
+
+    // Screensaver inhibit tracks the PLAYING state (parity: acquire on
+    // media+unpaused, release on pause/end/teardown).
+    auto screensaver = std::make_unique<nuvio::integrations::ScreensaverInhibit>();
+    QObject::connect(controller.get(), &nuvio::mpv::MpvController::snapshotChanged,
+                     screensaver.get(), [ss = screensaver.get()](nuvio::mpv::PlaybackSnapshot s) {
+                         if (s.hasMedia() && !s.paused) ss->acquire();
+                         else ss->release();
+                     });
+    QObject::connect(controller.get(), &nuvio::mpv::MpvController::reachedEnd,
+                     screensaver.get(),
+                     &nuvio::integrations::ScreensaverInhibit::release);
+
     QObject::connect(playbackSession.get(),
                      &nuvio::playback::PlaybackSession::sessionChanged,
                      discord.get(), [dp = discord.get(), ps =
