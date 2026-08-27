@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Controls
+import Nuvio.Mpv 1.0
 import "../theme"
 
 // Detail/meta route: poster + backdrop, info block, Play (movies), and a
@@ -60,6 +61,59 @@ Item {
         if (youtubeTrailer) trailer.resolveForKey(youtubeTrailer.key)
     }
 
+    // ---- hero ambient trailer (Compose detail-hero parity) -------------------
+    // Autoplays the first YouTube trailer MUTED as a full-bleed backdrop
+    // while the detail page is visible; stops on route leave and on meta
+    // switch. Kill switch: NUVIO_NO_HERO=1 removes heroController entirely.
+    readonly property bool heroEnabled:
+        (typeof heroAmbientEnabled !== "undefined") && heroAmbientEnabled
+    property string heroKey: ""
+    readonly property bool heroActive:
+        heroEnabled && heroKey.length > 0 && !smokeActive && visible
+
+    function maybeStartHero() {
+        if (!heroEnabled || smokeActive || !visible) return
+        const t = youtubeTrailer
+        if (!t || t.key === heroKey) return
+        heroKey = t.key
+        trailer.resolveForKeyAmbient(t.key)
+    }
+    function stopHero() {
+        if (heroKey.length === 0) return
+        heroKey = ""
+        if (typeof heroController !== "undefined")
+            heroController.enqueueCommand(["stop"])
+    }
+    onVisibleChanged: visible ? maybeStartHero() : stopHero()
+    onCurChanged: maybeStartHero()
+    Component.onCompleted: maybeStartHero()
+    Connections {
+        target: trailer
+        function onAmbientResolved(url, audioUrl) {
+            if (!detail.visible || detail.heroKey.length === 0) return
+            heroItem.play(url, audioUrl || "", 0)
+        }
+        function onAmbientFailed(reason) { detail.heroKey = "" }
+    }
+
+    // ---- hero video layer (FIRST child => renders behind all content) -------
+    MpvItem {
+        id: heroItem
+        anchors.fill: parent
+        visible: detail.heroActive
+        controller: (typeof heroController !== "undefined")
+                        ? heroController : null
+    }
+    // Readability scrim over the ambient video.
+    Rectangle {
+        anchors.fill: parent
+        visible: detail.heroActive
+        gradient: Gradient {
+            GradientStop { position: 0.0; color: "#59000000" }
+            GradientStop { position: 1.0; color: "#E6000000" }
+        }
+    }
+
     // ---- backdrop ------------------------------------------------------------
     Image {
         anchors.fill: parent
@@ -67,8 +121,9 @@ Item {
         opacity: 0.16
         asynchronous: true
         sourceSize.width: 1280
-        visible: (cur.background || "").length > 0
-        source: visible ? "image://poster/" + (cur.background || "") : ""
+        visible: (cur.background || "").length > 0 && !detail.heroActive
+        source: (visible && (cur.background || "").length > 0)
+                    ? "image://poster/" + cur.background : ""
     }
 
     // ---- header row ----------------------------------------------------------

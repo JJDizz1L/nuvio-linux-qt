@@ -206,6 +206,19 @@ int main(int argc, char* argv[])
     auth->restoreSession();
     catalog->loadShelves();     // stored tokens -> active or silent refresh
 
+    // Hero ambient trailer (Compose detail-hero parity): a SECOND mpv
+    // instance dedicated to the MetaPage backdrop. Per-instance controllers
+    // are the sanctioned pattern (Compose runs several concurrent surfaces);
+    // this one is born muted so it can never touch the user's volume.
+    // Kill switch: NUVIO_NO_HERO=1 skips instance creation entirely.
+    std::unique_ptr<nuvio::mpv::MpvController> heroController;
+    const bool heroEnabled = !qEnvironmentVariableIsSet("NUVIO_NO_HERO");
+    if (heroEnabled) {
+        heroController = std::make_unique<nuvio::mpv::MpvController>();
+        heroController->start();
+        heroController->setVolumePercent(0);   // ambient: born muted
+    }
+
     // Profile-settings sync (P4 leg 4): background startup pull + debounced
     // push on settings changes. Fully self-guarding: signed-out or
     // unconfigured endpoints make every operation a silent no-op.
@@ -328,6 +341,13 @@ int main(int argc, char* argv[])
     engine.rootContext()->setContextProperty(
         QStringLiteral("searchHistory"),
         QVariant::fromValue<QObject*>(searchHistory.get()));
+    // Hero ambient-trailer contexts (MetaPage backdrop autoplay).
+    engine.rootContext()->setContextProperty(
+        QStringLiteral("heroAmbientEnabled"), QVariant::fromValue(heroEnabled));
+    if (heroController)
+        engine.rootContext()->setContextProperty(
+            QStringLiteral("heroController"),
+            QVariant::fromValue<QObject*>(heroController.get()));
     engine.rootContext()->setContextProperty(
         QStringLiteral("meta"), QVariant::fromValue<QObject*>(
                                     metaSvc.get()));

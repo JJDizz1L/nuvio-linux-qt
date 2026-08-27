@@ -44,6 +44,29 @@ int main(int argc, char** argv)
     CHECK(!r.isResolving(), "invalid key leaves resolver idle");
 
     r.resolveForKey(QStringLiteral("not-a-youtube-id-!!!!"));
+
+    { // AMBIENT mode: failures route to ambientFailed, never trailerFailed
+        TrailerResolver ra;
+        int aFail = 0, tFail = 0, aOk = 0, tOk = 0;
+        QObject::connect(&ra, &TrailerResolver::ambientFailed,
+                         [&](QString) { ++aFail; });
+        QObject::connect(&ra, &TrailerResolver::trailerFailed,
+                         [&](QString) { ++tFail; });
+        QObject::connect(&ra, &TrailerResolver::ambientResolved,
+                         [&](QString, QString) { ++aOk; });
+        QObject::connect(&ra, &TrailerResolver::trailerResolved,
+                         [&](QString, QString) { ++tOk; });
+
+        ra.resolveForKeyAmbient(QString());          // invalid -> ambient path
+        ra.resolveForKeyAmbient(QStringLiteral("###bad###"));
+        CHECK(aFail == 2 && aOk == 0 && tFail == 0 && tOk == 0,
+              "ambient failures stay on ambient signals");
+
+        // Mode resets per call: playback variant still lands on trailerFailed.
+        ra.resolveForKey(QString());
+        CHECK(tFail == 1 && aFail == 2,
+              "playback-mode routing restored after ambient call");
+    }
     CHECK(failedCount == 2 && resolvedCount == 0,
           "garbage key -> trailerFailed");
     CHECK(!r.isResolving(), "garbage key leaves resolver idle");

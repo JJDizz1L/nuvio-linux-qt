@@ -32,15 +32,22 @@ public:
     /// Returns immediately; results arrive via trailerResolved/trailerFailed
     /// (resolution runs on a worker thread so the QML thread never blocks).
     Q_INVOKABLE void resolveForKey(const QString& keyOrUrl);
+    /// Ambient (hero) variant: identical pipeline, but completion emits
+    /// ambientResolved/ambientFailed so the shell's playback-route hijack
+    /// never fires for background autoplays.
+    Q_INVOKABLE void resolveForKeyAmbient(const QString& keyOrUrl);
 
     [[nodiscard]] bool isResolving() const { return m_resolving; }
 
 signals:
     void trailerResolved(const QString& url, const QString& audioUrl);
     void trailerFailed(const QString& reason);
+    void ambientResolved(const QString& url, const QString& audioUrl);
+    void ambientFailed(const QString& reason);
     void resolvingChanged();
 
 private:
+    void beginResolve(const QString& keyOrUrl);
     /// Runs on the worker thread: the full synchronous walk (visitor-data
     /// fetch -> client chain -> source policy -> host-rotation probes) builds
     /// locals, then QMetaObject::invokeMethod(QueuedConnection) delivers the
@@ -61,6 +68,7 @@ private:
     bool isUrlReachable(QNetworkAccessManager& nam, const QString& url);
 
     bool m_resolving = false;        // read/written on the QML thread only
+    bool m_ambient   = false;        // mode of the in-flight resolution
     mutable std::mutex m_cacheMutex; // guards m_visitorData (worker-written)
     QString m_visitorData;
 };

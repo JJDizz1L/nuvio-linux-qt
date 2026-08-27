@@ -156,9 +156,22 @@ QString TrailerResolver::resolveReachableUrlOrNull(
 
 void TrailerResolver::resolveForKey(const QString& keyOrUrl)
 {
+    m_ambient = false;
+    beginResolve(keyOrUrl);
+}
+
+void TrailerResolver::resolveForKeyAmbient(const QString& keyOrUrl)
+{
+    m_ambient = true;
+    beginResolve(keyOrUrl);
+}
+
+void TrailerResolver::beginResolve(const QString& keyOrUrl)
+{
     const QString videoId = extractVideoId(keyOrUrl);
     if (videoId.isEmpty()) {
-        emit trailerFailed(QStringLiteral("invalid YouTube url"));
+        if (m_ambient) emit ambientFailed(QStringLiteral("invalid YouTube url"));
+        else           emit trailerFailed(QStringLiteral("invalid YouTube url"));
         return;
     }
     if (m_resolving) return;             // one in-flight resolution only
@@ -268,8 +281,13 @@ void TrailerResolver::runResolveWorker(const QString& videoId)
     QMetaObject::invokeMethod(
         this,
         [this, ok, videoUrl, audioUrl, reason] {
-            if (ok)      emit trailerResolved(videoUrl, audioUrl);
-            else         emit trailerFailed(reason);
+            if (ok) {
+                if (m_ambient) emit ambientResolved(videoUrl, audioUrl);
+                else           emit trailerResolved(videoUrl, audioUrl);
+            } else {
+                if (m_ambient) emit ambientFailed(reason);
+                else           emit trailerFailed(reason);
+            }
             m_resolving = false;
             emit resolvingChanged();
         },
