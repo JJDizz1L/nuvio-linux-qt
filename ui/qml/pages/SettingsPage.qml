@@ -107,6 +107,88 @@ Item {
             }
         }
 
+        // ---- playback: track languages ------------------------------------------
+        Column {
+            width: parent.width
+            spacing: 4
+            Text {
+                text: qsTr("Preferred audio language")
+                color: Theme.textPrimary
+                font.pixelSize: 15
+            }
+            ComboBox {
+                width: parent.width * 0.6
+                textRole: "label"
+                model: [
+                    { label: qsTr("Follow device"), value: "device" },
+                    { label: qsTr("Original"),      value: "original" },
+                    { label: "English",   value: "en" },
+                    { label: "日本語",     value: "ja" },
+                    { label: "한국어",     value: "ko" },
+                    { label: "中文",       value: "zh" },
+                    { label: "Español",          value: "es" },
+                    { label: "Español (LatAm)",  value: "es-419" },
+                    { label: "Português (BR)",   value: "pt-BR" },
+                    { label: "Français",  value: "fr" },
+                    { label: "Deutsch",   value: "de" },
+                    { label: "Italiano",  value: "it" },
+                    { label: "Русский",   value: "ru" },
+                    { label: "हिन्दी",      value: "hi" }
+                ]
+                currentIndex: {
+                    const vals = model.map(function(m){ return m.value })
+                    const i = vals.indexOf(appsettings.preferredAudioLanguage)
+                    return i >= 0 ? i : 0               // device default
+                }
+                onActivated: function(i) {
+                    appsettings.preferredAudioLanguage = model[i].value
+                }
+            }
+
+            Text {
+                text: qsTr("Preferred subtitles")
+                color: Theme.textPrimary
+                font.pixelSize: 15
+            }
+            ComboBox {
+                width: parent.width * 0.6
+                textRole: "label"
+                model: [
+                    { label: qsTr("Off"),                 value: "none" },
+                    { label: qsTr("Forced only"),         value: "forced" },
+                    { label: "English",   value: "en" },
+                    { label: "日本語",     value: "ja" },
+                    { label: "한국어",     value: "ko" },
+                    { label: "中文",       value: "zh" },
+                    { label: "Español",          value: "es" },
+                    { label: "Español (LatAm)",  value: "es-419" },
+                    { label: "Português (BR)",   value: "pt-BR" },
+                    { label: "Français",  value: "fr" },
+                    { label: "Deutsch",   value: "de" },
+                    { label: "Italiano",  value: "it" },
+                    { label: "Русский",   value: "ru" },
+                    { label: "हिन्दी",      value: "hi" }
+                ]
+                currentIndex: {
+                    const vals = model.map(function(m){ return m.value })
+                    const i = vals.indexOf(appsettings.preferredSubtitleLanguage)
+                    return i >= 0 ? i : 0               // none default
+                }
+                onActivated: function(i) {
+                    appsettings.preferredSubtitleLanguage = model[i].value
+                }
+            }
+            Text {
+                text: qsTr("Applies at each file load. Match rules mirror "
+                           + "the Compose line (region codes fall back to "
+                           + "their primary language).")
+                color: Theme.textDisabled
+                font.pixelSize: 11
+                wrapMode: Text.Wrap
+                width: parent.width
+            }
+        }
+
         // ---- integrations: discord ---------------------------------------------
         Column {
             width: parent.width
