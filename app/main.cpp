@@ -17,6 +17,8 @@
 #include "nuvio/mpv/MpvController.h"
 #include "nuvio/mpv/MpvLog.h"
 #include "nuvio/mpv/MpvQuickItem.h"
+#include "nuvio/ui/NavigationModel.h"
+#include "nuvio/ui/PosterProvider.h"
 #include "nuvio/ui/UiBootstrap.h"
 
 int main(int argc, char* argv[])
@@ -85,10 +87,20 @@ int main(int argc, char* argv[])
     auto controller = std::make_unique<nuvio::mpv::MpvController>();
     controller->start();
 
+    // Screen-stack viewmodel + async poster pipeline (Phase 3 skeleton).
+    // Declared after controller so teardown order unwinds nav before the
+    // mpv core joins (QML is already dead by then either way).
+    auto navigation = std::make_unique<nuvio::ui::NavigationModel>();
+
     QQmlApplicationEngine engine;
     QObject::connect(&engine, &QQmlEngine::quit,
                      &app, &QCoreApplication::quit);
     nuvio::ui::registerWith(engine);
+    engine.rootContext()->setContextProperty(
+        QStringLiteral("navigation"), QVariant::fromValue<QObject*>(
+                                          navigation.get()));
+    engine.addImageProvider(QStringLiteral("poster"),
+                            new nuvio::ui::PosterProvider());  // engine takes ownership
     engine.rootContext()->setContextProperty(
         QStringLiteral("mpvController"), QVariant::fromValue<QObject*>(
                                              controller.get()));

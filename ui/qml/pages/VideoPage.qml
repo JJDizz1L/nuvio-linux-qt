@@ -52,33 +52,6 @@ Item {
         mpv.play(source)
     }
 
-    // ---- idle brand mark (until first media arrives) -----------------------
-    Column {
-        anchors.centerIn: parent
-        spacing: Theme.spacingMd
-        visible: !mpv.hasMedia
-
-        Text {
-            anchors.horizontalCenter: parent.horizontalCenter
-            text: qsTr("Nuvio")
-            color: Theme.textPrimary
-            font.pixelSize: 44
-            font.weight: Font.DemiBold
-        }
-        Text {
-            anchors.horizontalCenter: parent.horizontalCenter
-            text: qsTr("Linux — exploration build")
-            color: Theme.textSecondary
-            font.pixelSize: 15
-        }
-        Text {
-            anchors.horizontalCenter: parent.horizontalCenter
-            text: qsTr("usage: nuvio-linux-qt <file|url>   ·   F11 fullscreen")
-            color: Theme.textDisabled
-            font.pixelSize: 12
-        }
-    }
-
     // ---- chrome auto-hide --------------------------------------------------
     // Display-layer convenience ONLY (plan directive: nothing here may
     // influence media timing). A coarse clock bumps `now` purely so the two

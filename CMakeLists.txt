@@ -25,7 +25,7 @@ set(CMAKE_AUTORCC OFF)      # resources added explicitly per-target
 set(CMAKE_AUTOUIC OFF)
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
-set(NUVIO_QT_REQUIRED_COMPONENTS Core Gui Quick QuickControls2)
+set(NUVIO_QT_REQUIRED_COMPONENTS Core Gui Quick QuickControls2 Network)
 find_package(Qt6 6.2 REQUIRED COMPONENTS ${NUVIO_QT_REQUIRED_COMPONENTS})
 # QtTest is required only by test targets and resolved within those lists.
 
