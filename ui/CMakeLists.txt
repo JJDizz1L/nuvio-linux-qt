@@ -3,7 +3,8 @@ add_library(nuvio_ui STATIC
     include/nuvio/ui/UiBootstrap.h              src/UiBootstrap.cpp
     include/nuvio/ui/PlaceholderImageProvider.h src/PlaceholderImageProvider.cpp
     include/nuvio/ui/NavigationModel.h          src/NavigationModel.cpp
-    include/nuvio/ui/PosterProvider.h           src/PosterProvider.cpp)
+    include/nuvio/ui/PosterProvider.h           src/PosterProvider.cpp
+    include/nuvio/ui/PreferencesApplier.h       src/PreferencesApplier.cpp)
 
 target_include_directories(nuvio_ui PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
@@ -19,13 +20,14 @@ qt_add_resources(nuvio_ui nuvio_qml
         qml/pages/HomePage.qml
         qml/pages/WelcomePage.qml
         qml/pages/LibraryPage.qml
+        qml/pages/SettingsPage.qml
         qml/components/TransportBar.qml)
 
 # The UI compiles against the mpv system's public headers and links it — the
 # ONLY sanctioned systems dependency from this layer (plus future viewmodels).
 target_link_libraries(nuvio_ui
     PUBLIC  Qt6::Quick Qt6::QuickControls2 Qt6::Network
-            nuvio::mpv nuvio::platform)
+            nuvio::mpv nuvio::platform nuvio::settings)
 
 nuvio_common_target_props(nuvio_ui)
 add_library(nuvio::ui ALIAS nuvio_ui)

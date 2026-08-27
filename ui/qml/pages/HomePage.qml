@@ -36,6 +36,11 @@ Item {
             text: qsTr("Browse Library")
             onClicked: navigation.pushIfDifferent("library")
         }
+        Button {
+            anchors.horizontalCenter: parent.horizontalCenter
+            text: qsTr("Settings")
+            onClicked: navigation.pushIfDifferent("settings")
+        }
         Text {
             anchors.horizontalCenter: parent.horizontalCenter
             text: qsTr("usage: nuvio-linux-qt <file|url>   ·   F11 fullscreen")

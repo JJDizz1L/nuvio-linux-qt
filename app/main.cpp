@@ -19,6 +19,8 @@
 #include "nuvio/mpv/MpvQuickItem.h"
 #include "nuvio/authsync/AuthService.h"
 #include "nuvio/ui/NavigationModel.h"
+#include "nuvio/ui/PreferencesApplier.h"
+#include "nuvio/settings/AppSettings.h"
 #include "nuvio/ui/PosterProvider.h"
 #include "nuvio/ui/UiBootstrap.h"
 
@@ -93,6 +95,7 @@ int main(int argc, char* argv[])
     // mpv core joins (QML is already dead by then either way).
     auto navigation = std::make_unique<nuvio::ui::NavigationModel>();
     auto auth       = std::make_unique<nuvio::authsync::AuthService>();
+    auto settings   = std::make_unique<nuvio::settings::AppSettings>();
     auth->restoreSession();     // stored tokens -> active or silent refresh
 
     QQmlApplicationEngine engine;
@@ -102,6 +105,15 @@ int main(int argc, char* argv[])
     engine.rootContext()->setContextProperty(
         QStringLiteral("navigation"), QVariant::fromValue<QObject*>(
                                           navigation.get()));
+    engine.rootContext()->setContextProperty(
+        QStringLiteral("appsettings"), QVariant::fromValue<QObject*>(
+                                            settings.get()));
+    auto prefApplier = std::make_unique<nuvio::ui::PreferencesApplier>(
+        *settings, controller.get());
+    prefApplier->applyAll();       // queued-safe even pre-init
+    engine.rootContext()->setContextProperty(
+        QStringLiteral("applier"),
+        QVariant::fromValue<QObject*>(prefApplier.get()));
     engine.rootContext()->setContextProperty(
         QStringLiteral("auth"), QVariant::fromValue<QObject*>(auth.get()));
     engine.addImageProvider(QStringLiteral("poster"),

@@ -1,6 +1,9 @@
 # systems/settings — profile-scoped stores (byte-compatible readers/writers
 # for the DesktopStorage file formats used by the Compose line). P1.
-add_library(nuvio_settings STATIC src/SettingsSystem.cpp src/PropertiesStore.cpp)
+add_library(nuvio_settings STATIC
+    include/nuvio/settings/AppSettings.h     src/AppSettings.cpp
+    include/nuvio/settings/PropertiesStore.h src/PropertiesStore.cpp
+    src/SettingsSystem.cpp)
 target_include_directories(nuvio_settings PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_link_libraries(nuvio_settings PUBLIC Qt6::Core)
 nuvio_common_target_props(nuvio_settings)
@@ -9,3 +12,8 @@ if(BUILD_TESTING)
     add_subdirectory(tests)
 endif()
 add_library(nuvio::settings ALIAS nuvio_settings)
+find_package(Qt6 REQUIRED COMPONENTS Core)
+add_executable(nuvio_appsettings_tests tests/AppSettingsTests.cpp)
+target_link_libraries(nuvio_appsettings_tests PRIVATE nuvio_settings Qt6::Core)
+nuvio_common_target_props(nuvio_appsettings_tests)
+add_test(NAME nuvio_appsettings COMMAND nuvio_appsettings_tests)
