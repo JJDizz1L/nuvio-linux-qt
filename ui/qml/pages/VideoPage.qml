@@ -151,6 +151,9 @@ Item {
             }
             page.evaluateNextEpisode()
             page.evaluateSkip()
+            // Scrobble pump (T1): start/pause/completion/seek edges fan
+            // out to connected tracking providers; silent with none.
+            scrobble.tick(mpv.positionMs, mpv.durationMs, mpv.paused)
         }
     }
     onVisibleChanged: {

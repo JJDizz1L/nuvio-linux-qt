@@ -225,8 +225,9 @@ QJsonObject PlayerSettingsSync::exportSyncPayload(
     putBoolean(playerStore, out, kSkipIntro);
     putStringSet(playerStore, out, kAutoSkipTypes);
     putBoolean(playerStore, out, kAnimeSkip);
-    putString(playerStore, out, kAnimeSkipClient);
-    // kIntroDbKey deliberately omitted: credential (Compose export parity).
+    // kAnimeSkipClient + kIntroDbKey deliberately omitted: credentials
+    // (Compose ProfileSettingsCredentialPolicy strips both from the blob;
+    // they sync through the provider-credentials family instead).
     putBoolean(playerStore, out, kIntroSubmit);
     putBoolean(playerStore, out, kNextEp);
     putBoolean(playerStore, out, kNextEpFallback);

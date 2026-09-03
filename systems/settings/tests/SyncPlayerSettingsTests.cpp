@@ -113,6 +113,7 @@ int main(int argc, char** argv)
         seed.putFloat("next_episode_threshold_percent_v2_1", 80.5f);
         seed.putStringSet("auto_skip_segment_types_1", {"recap", "intro"});
         seed.putString("introdb_api_key_1", "secret");
+        seed.putString("animeskip_client_id_1", "cid");
         seed.putString("stream_auto_play_selected_addons_1", "[\"b\",\"a\"]");
         seed.persist();
 
@@ -128,6 +129,8 @@ int main(int argc, char** argv)
               "string-set envelope sorted");
         CHECK(!json.contains("introdb_api_key_1"),
               "credential key never exported");
+        CHECK(!json.contains("animeskip_client_id_1"),
+              "client-id credential never exported");
         CHECK(!json.contains("android_playback_engine_1"),
               "mobile-only keys absent without storage");
     }

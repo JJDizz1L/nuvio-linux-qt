@@ -77,6 +77,10 @@ ApplicationWindow {
         anchors.fill: parent
         visible: navigation.currentRoute === "settings-homescreen"
     }
+    Pages.SettingsTrackingPage {
+        anchors.fill: parent
+        visible: navigation.currentRoute === "settings-tracking"
+    }
     Pages.SettingsIntegrationsPage {
         anchors.fill: parent
         visible: navigation.currentRoute === "settings-integrations"
@@ -214,6 +218,9 @@ ApplicationWindow {
                                     && meta.current
                                     && meta.current.videos)
                 ? meta.current.videos : []
+            // Scrobble pump (T1): re-arm per-item latches for the session.
+            scrobble.beginItem(playback.currentType, playback.currentId,
+                               title)
             pageItem.launchMedia(url, "", resumeMs)
         }
         // Unavailable results are surfaced by LibraryPage's toast.

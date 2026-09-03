@@ -178,15 +178,45 @@ backends yet (P3+ with their features).
   pass through); `rememberLastProfile` honored in payload only (no
   auto-resume UX yet).
 
-## Appendix A — Not-started backlog (do NOT execute in this plan)
+## Appendix A — backlog (P1–P7 landed; A1 done, rest ordered)
 
-Trakt / Simkl / tracking abstraction → provider-creds sync; Debrid
-(Torbox/Premiumize/RealDebrid + template engine) + cloud library; Downloads;
-episode-release notifications; TMDB service + settings; MDBList;
-membership/supporter; plugins runtime (QuickJS/WASM/DOM/crypto);
-library/collection/home-catalog sync legs; in-app updater; deeplink
-(`nuvio://`/`stremio://`); Sentry; P5 packaging (DEB/RPM/Flatpak/AppImage,
-portal helper, signing, AUR).
+### A1 Tracking (Trakt/SIMKL) ✅ DONE 2026-09-03 (42/42 ctest, boot clean, smoke PASS vaapi-copy)
+
+- **T1 abstraction.** `systems/tracking`: provider ids/capabilities,
+  media reference (Compose MOVIE/SHOW/ANIME kinds — not Movie/Episode),
+  wire actions, registry (auth-pushed connected set, supervisor fan-out),
+  coordinator (active-profile guard), `ScrobblePump` (start-once,
+  pause-edge, 80% completion stop, >5 s-jump seek stop+restart); wired to
+  session begin + VideoPage 1 Hz tick; silent with nothing connected.
+- **T2 Trakt.** Device-code auth (code/poll/redeem/refresh/invalidate,
+  per-profile `trakt_auth_payload_<id>` + legacy migration, env creds,
+  inert when empty) + scrobbler (verbatim bodies with omitted nulls,
+  8 s/±1.5 throttle, stop-after-start exemption, stop retried 2x,
+  401 signs out) registered STOP_AND_RESTART.
+- **T3 SIMKL.** PIN auth (code/poll/outcomes, per-profile token store) +
+  direct scrobbler (verbatim DTOs incl. tv-style-anime show leg, 2dp
+  progress); PKCE browser flow needs deeplinks (deferred); full sync
+  engine (snapshots/projections/playback merge) stays in backlog.
+- **T4 creds + UI.** `SettingsTrackingPage` (both provider cards, codes,
+  cancel, sign-out, connected line) + `ProviderCredsController`
+  (animeskip/introdb through push/seed/pull, remote-wins merge, baseline
+  dedup). **Parity fix:** the blob export leaked both credential keys —
+  Compose strips them (credential policy); export omits them now, the
+  credential family is their only wire path.
+- Deferred with reasons: Trakt/SIMKL library/progress/watched providers
+  + comments/related (need the read backends + engine), list/history
+  writers, device-link QR login, custom-server discovery, avatar catalog
+  fetch, Trakt OAuth browser callback (needs deeplinks).
+- TEST-LATER: device/PIN flows against real accounts (user at
+  trakt.tv/activate, simkl.com/pin), live scrobble round-trip,
+  credential vault round-trip on the Tier-1 pattern.
+
+Remaining, in suggested order: Debrid (Torbox/Premiumize/RealDebrid +
+template engine) + cloud library; Downloads manager; episode-release
+notifications; TMDB service + settings; MDBList; membership/supporter;
+plugins runtime (QuickJS/WASM/DOM/crypto); home-catalog settings sync;
+in-app updater; deeplink (`nuvio://`/`stremio://`); Sentry; packaging
+cutover (DEB/RPM/Flatpak/AppImage, portal helper, signing, AUR).
 
 ## Appendix B — Skip / incompatible (normative)
 

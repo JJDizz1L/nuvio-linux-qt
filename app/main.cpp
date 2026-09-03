@@ -29,10 +29,17 @@
 #include "nuvio/authsync/AddonsSyncController.h"
 #include "nuvio/authsync/CollectionSyncController.h"
 #include "nuvio/authsync/LibrarySyncController.h"
+#include "nuvio/authsync/ProviderCredsController.h"
 #include "nuvio/authsync/ProgressSyncController.h"
 #include "nuvio/authsync/AuthService.h"
 #include "nuvio/authsync/SyncOrchestrator.h"
 #include "nuvio/profiles/ProfileManager.h"
+#include "nuvio/tracking/ScrobblePump.h"
+#include "nuvio/tracking/SimklAuth.h"
+#include "nuvio/tracking/SimklScrobble.h"
+#include "nuvio/tracking/TrackingRegistry.h"
+#include "nuvio/tracking/TraktAuth.h"
+#include "nuvio/tracking/TraktScrobble.h"
 #include "nuvio/settings/ActiveProfile.h"
 #include "nuvio/library/AddonRegistry.h"
 #include "nuvio/library/CollectionStore.h"
@@ -436,6 +443,37 @@ int main(int argc, char* argv[])
     // here; results open the player route via the shell's video page.
     auto trailerResolver =
         std::make_unique<nuvio::trailer::TrailerResolver>();
+    // Tracking (T1): registry + scrobble pump. Providers register in T2+;
+    // until then every dispatch is a silent no-op (nothing connected).
+    auto trackingRegistry =
+        std::make_unique<nuvio::tracking::TrackingRegistry>();
+    auto scrobblePump = std::make_unique<nuvio::tracking::ScrobblePump>(
+        trackingRegistry.get());
+    engine.rootContext()->setContextProperty(
+        QStringLiteral("tracking"), QVariant::fromValue<QObject*>(
+                                        trackingRegistry.get()));
+    engine.rootContext()->setContextProperty(
+        QStringLiteral("scrobble"), QVariant::fromValue<QObject*>(
+                                        scrobblePump.get()));
+    // Trakt (T2): device-code auth + scrobbler, registered into the
+    // tracking registry (connected state follows auth). Client id/secret
+    // ride NUVIO_TRAKT_CLIENT_ID/_SECRET (empty = inert, Compose parity).
+    auto traktAuth = std::make_unique<nuvio::tracking::TraktAuth>();
+    auto traktScrobbler = std::make_unique<nuvio::tracking::TraktScrobbler>(
+        traktAuth.get(), trackingRegistry.get(),
+        QString::fromLatin1(NUVIO_VERSION_STRING));
+    engine.rootContext()->setContextProperty(
+        QStringLiteral("trakt"), QVariant::fromValue<QObject*>(
+                                     traktAuth.get()));
+    // SIMKL (T3): PIN auth + direct scrobbler. Client id rides
+    // NUVIO_SIMKL_CLIENT_ID (empty = inert, Compose parity).
+    auto simklAuth = std::make_unique<nuvio::tracking::SimklAuth>(
+        QString::fromLatin1(NUVIO_VERSION_STRING));
+    auto simklScrobbler = std::make_unique<nuvio::tracking::SimklScrobbler>(
+        simklAuth.get(), trackingRegistry.get());
+    engine.rootContext()->setContextProperty(
+        QStringLiteral("simkl"), QVariant::fromValue<QObject*>(
+                                     simklAuth.get()));
     engine.rootContext()->setContextProperty(
         QStringLiteral("trailer"), QVariant::fromValue<QObject*>(
                                        trailerResolver.get()));
@@ -546,6 +584,25 @@ int main(int argc, char* argv[])
         librarySync->fullLibrarySyncThenDeltas();
         collectionSync->pullNow();
     }
+    // Provider credentials (T4): the two skip-provider API keys through
+    // the credential family (the settings blob strips them by policy).
+    auto credsSync =
+        std::make_unique<nuvio::authsync::ProviderCredsController>(
+            settings.get(), nuvio::authsync::AuthConfig::load(),
+            [ap = auth.get()] { return ap->accessToken(); },
+            nuvio::settings::ActiveProfile::id());
+    QObject::connect(settings.get(),
+                     &nuvio::settings::AppSettings::playerOptionsChanged,
+                     credsSync.get(),
+                     &nuvio::authsync::ProviderCredsController::
+                         onLocalCredsChanged);
+    QObject::connect(
+        auth.get(), &nuvio::authsync::AuthService::stateChanged,
+        auth.get(),
+        [cs = credsSync.get(), ap = auth.get()] {
+            if (cs && ap->sessionActive()) cs->syncNow();
+        });
+    if (auth->sessionActive()) credsSync->syncNow();
     {
         // One full/delta pull per session activation (initial + re-login).
         bool initialSyncFired = false;
@@ -592,6 +649,8 @@ int main(int argc, char* argv[])
             collectionStore->setProfileId(index);
             addonreg->setProfileId(index);
             homeShelves->setProfileId(index);
+            traktAuth->setProfileId(index);
+            simklAuth->setProfileId(index);
             searchHistory->refresh();
             metaSvc->refreshSeasonViewMode();
             settings->refreshAll();
@@ -600,6 +659,7 @@ int main(int argc, char* argv[])
             librarySync->setProfileId(index);
             collectionSync->setProfileId(index);
             addonsSync->setProfileId(index);
+            credsSync->setProfileId(index);
         });
     QObject::connect(
         auth.get(), &nuvio::authsync::AuthService::stateChanged,
