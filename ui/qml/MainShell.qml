@@ -69,6 +69,10 @@ ApplicationWindow {
         anchors.fill: parent
         visible: navigation.currentRoute === "settings-continuewatching"
     }
+    Pages.SettingsHomescreenPage {
+        anchors.fill: parent
+        visible: navigation.currentRoute === "settings-homescreen"
+    }
     Pages.SettingsIntegrationsPage {
         anchors.fill: parent
         visible: navigation.currentRoute === "settings-integrations"

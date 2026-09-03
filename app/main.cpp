@@ -31,6 +31,7 @@
 #include "nuvio/authsync/AuthService.h"
 #include "nuvio/authsync/SyncOrchestrator.h"
 #include "nuvio/library/AddonRegistry.h"
+#include "nuvio/library/HomeShelves.h"
 #include "nuvio/settings/PropertiesStore.h"
 #include "nuvio/settings/SearchHistory.h"
 #include "nuvio/settings/SyncIdentity.h"
@@ -395,6 +396,14 @@ int main(int argc, char* argv[])
     engine.rootContext()->setContextProperty(
         QStringLiteral("catalog"), QVariant::fromValue<QObject*>(
                                         catalog.get()));
+    // Home rails (P4): addon-catalog shelves + settings, auto-refreshing
+    // on registry changes (install/remove/enable, manifest arrivals).
+    auto homeShelves = std::make_unique<nuvio::library::HomeShelves>(
+        addonreg.get());
+    engine.rootContext()->setContextProperty(
+        QStringLiteral("homeshelves"), QVariant::fromValue<QObject*>(
+                                           homeShelves.get()));
+    homeShelves->refresh();
     // Recent searches (Compose search_history.properties parity); the QML
     // search page records/filters through this single instance.
     auto searchHistory =

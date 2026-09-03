@@ -5,6 +5,8 @@ add_library(nuvio_library STATIC
     include/nuvio/library/MetaService.h    src/MetaService.cpp
     include/nuvio/library/AddonStore.h     src/AddonStore.cpp
     include/nuvio/library/AddonRegistry.h  src/AddonRegistry.cpp
+    include/nuvio/library/HomeCatalogSettings.h src/HomeCatalogSettings.cpp
+    include/nuvio/library/HomeShelves.h    src/HomeShelves.cpp
     src/LibrarySystem.cpp)
 
 target_include_directories(nuvio_library PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
@@ -27,3 +29,8 @@ add_executable(nuvio_meta_tests tests/MetaServiceTests.cpp)
 target_link_libraries(nuvio_meta_tests PRIVATE nuvio::library)
 nuvio_common_target_props(nuvio_meta_tests)
 add_test(NAME nuvio_meta COMMAND nuvio_meta_tests)
+
+add_executable(nuvio_home_tests tests/HomeShelvesTests.cpp)
+target_link_libraries(nuvio_home_tests PRIVATE nuvio::library)
+nuvio_common_target_props(nuvio_home_tests)
+add_test(NAME nuvio_home COMMAND nuvio_home_tests)

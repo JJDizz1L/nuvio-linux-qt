@@ -44,6 +44,30 @@ QVariantMap AddonRegistry::parseManifest(const QString& url,
     if (out.value("id").toString().isEmpty() ||
         out.value("name").toString().isEmpty())
         return {};   // not a Stremio manifest
+    // P4 home needs the manifest's catalog inventory: [{type,id,name,
+    // hasRequiredExtra}]. Additive - older consumers ignore the key.
+    QVariantList catalogs;
+    for (const auto& c : obj.value(QLatin1String("catalogs")).toArray()) {
+        const QJsonObject co = c.toObject();
+        const QString ctype = co.value(QLatin1String("type")).toString();
+        const QString cid = co.value(QLatin1String("id")).toString();
+        const QString cname = co.value(QLatin1String("name")).toString();
+        if (ctype.isEmpty() || cid.isEmpty() || cname.isEmpty()) continue;
+        bool required = false;
+        for (const auto& e : co.value(QLatin1String("extra")).toArray()) {
+            if (e.toObject().value(QLatin1String("isRequired")).toBool()) {
+                required = true;
+                break;
+            }
+        }
+        catalogs.append(QVariantMap{
+            {QStringLiteral("type"), ctype},
+            {QStringLiteral("id"), cid},
+            {QStringLiteral("name"), cname},
+            {QStringLiteral("hasRequiredExtra"), required},
+        });
+    }
+    out.insert(QStringLiteral("catalogs"), catalogs);
     return out;
 }
 

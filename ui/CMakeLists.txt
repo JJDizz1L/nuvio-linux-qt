@@ -28,6 +28,7 @@ qt_add_resources(nuvio_ui nuvio_qml
         qml/pages/SettingsSubtitlesPage.qml
         qml/pages/SettingsStreamsPage.qml
         qml/pages/SettingsContinueWatchingPage.qml
+        qml/pages/SettingsHomescreenPage.qml
         qml/pages/SettingsIntegrationsPage.qml
         qml/pages/SettingsAccountPage.qml
         qml/components/TransportBar.qml

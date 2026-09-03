@@ -90,11 +90,30 @@ backends yet (P3+ with their features).
   playback, next-episode popup + countdown, hold-to-speed feel, StreamsPanel
   scope edits affecting a later autoplay pick.
 
-## P4 — Home depth
+## P4 — Home depth ✅ DONE 2026-09-03 (33/33 ctest incl. new nuvio_home, boot clean, smoke PASS vaapi-copy)
 
-Hero + catalog rails + discover row on `HomePage.qml` (CW wide-card
-untouched); homescreen settings leaf drives visibility/order; 4K
-scene-graph hygiene (no per-frame JS in delegates).
+- **Shelves.** `HomeCatalogSettings` codec/store (verbatim payload JSON,
+  `home_catalog_settings_1`, reconcile keeps user flags + appends new keys,
+  stable sort for tied orders) + `HomeShelves` fetcher (definitions from
+  enabled manifests, required-extra skipped, `/catalog` fetch, release
+  filter via carried `released` dates, deterministic hero = first items of
+  ≤2 hero sources). `parseManifest` rows gained `catalogs`; `itemFromMeta`
+  gained `type`/`description`/`released` (additive).
+- **UI.** HomePage = hero spotlight (poster/title/meta/Play/Info) + CW
+  rail (verbatim) + addon rails (library card idiom, watched badges);
+  new `SettingsHomescreenPage` leaf (hero/type/unreleased switches +
+  per-shelf enable/hero-source/custom-title/order) + root entry.
+- **Storm fix (bisect-proven).** First cut fired ~62 parallel fetches and
+  re-invalidated everything on each registry ping; the UI-thread rebuild
+  churn starved item-snapshot delivery (controller cache advanced,
+  advances=0 — the P0 signature). Fixed with differential refresh
+  (prune + fetch-missing only), cap-4 fetch queue, per-key fetching
+  state (global token removed). P3 tree passed mid-bisect, fixed tree
+  passes.
+- Divergences: hero pick deterministic (Compose seeded-random); non-tt
+  catalog rows dropped (MetaService detail is tt-only); no separate
+  discover row (addon rails cover it; search-discover stays a later port);
+  LibraryPage untouched (unification is P5 business).
 
 ## P5 — Library depth
 

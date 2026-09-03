@@ -173,6 +173,27 @@ int main(int argc, char** argv)
               "garbage rejected");
     }
 
+    { // P4: catalog inventory rides the row (required-extra flagged)
+        const auto row = AddonRegistry::parseManifest(
+            "https://c.example/manifest.json",
+            R"({"id":"com.c","name":"C","types":["movie"],
+                "catalogs":[
+                 {"type":"movie","id":"top","name":"Top",
+                  "extra":[{"name":"genre"}]},
+                 {"type":"movie","id":"search","name":"Search",
+                  "extra":[{"name":"search","isRequired":true}]},
+                 {"type":"movie","id":"","name":"Bad"}]})");
+        CHECK(!row.isEmpty(), "manifest with catalogs parses");
+        const auto cats = row.value("catalogs").toList();
+        CHECK(cats.size() == 2, "empty-id catalog dropped");
+        CHECK(cats[0].toMap().value("hasRequiredExtra") == false,
+              "optional-extra catalog kept unflagged");
+        CHECK(cats[1].toMap().value("hasRequiredExtra") == true,
+              "required-extra catalog flagged");
+        CHECK(cats[0].toMap().value("name").toString() == "Top",
+              "catalog name carried");
+    }
+
     std::printf(failures ? "ADDONS SUITE FAILURES=%d\n"
                          : "ADDONS SUITE OK (%d failures)\n",
                 failures);

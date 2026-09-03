@@ -53,6 +53,8 @@ Item {
                   hint: qsTr("Autoplay, next episode, skip intro") },
                 { label: qsTr("Continue Watching"), route: "settings-continuewatching",
                   hint: qsTr("Rail visibility and style") },
+                { label: qsTr("Homescreen"), route: "settings-homescreen",
+                  hint: qsTr("Hero, rails, rail order") },
                 { label: qsTr("Integrations"),     route: "settings-integrations",
                   hint: qsTr("Discord, torrent cache") },
                 { label: qsTr("Account"),          route: "settings-account",

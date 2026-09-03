@@ -48,6 +48,15 @@ QVariantMap CatalogService::itemFromMeta(const QVariantMap& meta,
     // slash-style the addon hands us.
     poster.replace(QLatin1String("//poster/"), QLatin1String("/poster/"));
     out.insert(QStringLiteral("poster"), poster);
+    // P4 home needs more than the rail minimum: content type (catalog rows
+    // mix movie/series), description (hero), released YYYY-MM-DD (unreleased
+    // filter). Additive - rail/search consumers ignore unknown keys.
+    out.insert(QStringLiteral("type"),
+               meta.value(QStringLiteral("type")).toString());
+    out.insert(QStringLiteral("description"),
+               meta.value(QStringLiteral("description")).toString());
+    out.insert(QStringLiteral("released"),
+               meta.value(QStringLiteral("released")).toString());
     return out;
 }
 
