@@ -12,6 +12,74 @@ Item {
     // episodes carry an "S1 E2 · Title" label).
     property string mediaTitle: ""
 
+    // Episode-list snapshot for next-episode continuation (set by the shell
+    // at playbackReady; series only, [] otherwise). A snapshot, not a live
+    // meta binding: hover previews mutate meta.current mid-browse.
+    property var episodeList: []
+
+    // Next-episode card state (per session key; countdown mirrors Compose's
+    // 3-2-1 after selection when auto-play is on).
+    QtObject {
+        id: nextEp
+        property string sessionKey: ""
+        property var info: null          // {id,season,episode,name}
+        property bool dismissed: false
+        property int countdown: -1       // -1 idle, else seconds left
+    }
+    // Parental-guide state (fetched once per tt session when enabled).
+    QtObject {
+        id: pg
+        property string sessionKey: ""
+        property var warnings: []
+        property bool shown: false
+    }
+    // Skip-intro state (P3c): intervals for the session, one auto-skip
+    // per segment (completion key mirrors the C++ helper's shape).
+    QtObject {
+        id: skipState
+        property string sessionKey: ""
+        property string pendingKey: ""
+        property var intervals: []
+        property string lastSkipped: ""
+    }
+    readonly property var activeSkip: {
+        if (!mpv.hasMedia || skipState.intervals.length === 0) return null
+        const pos = mpv.positionMs / 1000.0
+        for (const s of skipState.intervals) {
+            if (pos >= s.startSec && pos < s.endSec) return s
+        }
+        return null
+    }
+    function skipKey(s) {
+        return s.provider + ":" + s.type + ":" + s.startSec + ":" + s.endSec
+    }
+    function segLabel(type) {
+        const c = page.segCategory(type)
+        if (c === "recap") return qsTr("Skip recap")
+        if (c === "ending") return qsTr("Skip outro")
+        return qsTr("Skip intro")
+    }
+    // Provider types collapse to the three stored categories exactly like
+    // the C++ merge (intro|op|mixed-op -> intro, outro family -> outro).
+    function segCategory(type) {
+        const t = (type || "").toLowerCase()
+        if (t === "intro" || t === "op" || t === "mixed-op") return "intro"
+        if (t === "outro" || t === "ed" || t === "mixed-ed"
+            || t === "credits" || t === "ending") return "outro"
+        if (t === "recap") return "recap"
+        return ""
+    }
+    function evaluateSkip() {
+        const s = page.activeSkip
+        if (!s) return
+        if (appsettings.autoSkipSegmentTypes.indexOf(
+                page.segCategory(s.type)) < 0) return
+        const k = page.skipKey(s)
+        if (skipState.lastSkipped === k) return
+        skipState.lastSkipped = k
+        mpv.seekToSeconds(s.endSec)
+    }
+
     // `mpvController` resolves from engine context properties — set
     // unconditionally in main.cpp so this binding never sees undefined.
     MpvItem {
@@ -69,6 +137,7 @@ Item {
     // the Compose-shared watch_progress store; reaching >= 90 % completes the
     // session (marks watched + drops the resume row). Leaving the route
     // abandons the session, persisting the last >= 1 s position.
+    // The same tick evaluates the next-episode card (P3a).
     Timer {
         interval: 1000
         running: mpv.hasMedia && !mpv.paused
@@ -80,9 +149,135 @@ Item {
             } else {
                 watching.publishPosition(mpv.positionMs, mpv.durationMs)
             }
+            page.evaluateNextEpisode()
+            page.evaluateSkip()
         }
     }
-    onVisibleChanged: if (!visible) watching.endSessionAbandoned()
+    onVisibleChanged: {
+        if (!visible) {
+            watching.endSessionAbandoned()
+            mpv.setSpeed(1.0)   // hold-to-speed never leaks across routes
+        } else {
+            page.maybeFetchParentalGuide()
+            page.maybeResolveSkip()
+        }
+    }
+
+    // ---- next-episode continuation (P3a) ------------------------------------
+    // Composite series ids split exactly like the shell's beginSession.
+    // No released dates ride our episode rows, so the aired gate treats
+    // unknown as aired (Compose default). Intervals arrive with the skip
+    // leg (P3c); until then the plain settings threshold decides.
+    function currentParts() { return playback.currentId.split(":") }
+    function evaluateNextEpisode() {
+        if (!page.visible || !mpv.hasMedia) return
+        const parts = page.currentParts()
+        if (parts.length !== 3 || page.episodeList.length === 0) return
+        const key = playback.currentId
+        if (nextEp.sessionKey !== key) {
+            nextEp.sessionKey = key
+            nextEp.dismissed = false
+            nextEp.countdown = -1
+            page.cardVisible = false
+            nextEp.info = nextep.nextEpisode(page.episodeList, parts[0],
+                                             parseInt(parts[1], 10),
+                                             parseInt(parts[2], 10))
+            if (!nextEp.info) return
+        }
+        if (!nextEp.info || nextEp.dismissed || nextEp.countdown >= 0) return
+        const show = nextep.shouldShowCard(
+            mpv.positionMs, mpv.durationMs, skipState.intervals,
+            appsettings.nextEpisodeThresholdMode,
+            appsettings.nextEpisodeThresholdPercent,
+            appsettings.nextEpisodeThresholdMinutesBeforeEnd)
+        if (!show) return
+        if (appsettings.streamAutoPlayNextEpisodeEnabled)
+            nextEp.countdown = 3
+        else
+            page.cardVisible = true
+    }
+    property bool cardVisible: false
+    Timer {
+        id: countdownTimer
+        interval: 1000
+        repeat: true
+        running: nextEp.countdown >= 0 && page.visible
+        onTriggered: {
+            if (nextEp.countdown > 0) {
+                nextEp.countdown -= 1
+            } else {
+                nextEp.countdown = -1
+                page.playNextEpisode()
+            }
+        }
+    }
+    function playNextEpisode() {
+        if (!nextEp.info) return
+        nextEp.dismissed = true
+        page.cardVisible = false
+        playback.requestPlay(playback.currentType, nextEp.info.id,
+                             nextEp.info.name || "")
+    }
+    function dismissNextEpisode() {
+        nextEp.dismissed = true
+        nextEp.countdown = -1
+        page.cardVisible = false
+    }
+
+    // ---- parental guide (P3a) ------------------------------------------------
+    // Fetched once per tt session while the page is up; shown once as a
+    // dismissible card. Failures and non-tt ids stay silent.
+    Connections {
+        target: playback
+        function onSessionChanged() {
+            if (!page.visible) return
+            page.maybeFetchParentalGuide()
+            page.maybeResolveSkip()
+        }
+    }
+    // Skip intervals resolve once per session (P3c); cached keys answer
+    // fast. Gated on the master switch like Compose's repository.
+    function maybeResolveSkip() {
+        if (!appsettings.skipIntroEnabled || !playback.hasSession) return
+        const key = playback.currentId
+        if (skipState.sessionKey === key) return
+        skipState.sessionKey = key
+        skipState.pendingKey = key
+        skipState.intervals = []
+        skipState.lastSkipped = ""
+        skip.resolve(playback.currentId, playback.currentSeason,
+                     playback.currentEpisode)
+    }
+    Connections {
+        target: skip
+        function onIntervals(segments) {
+            // Stale delivery guard: a session that never issues its own
+            // lookup (switch off mid-flight) must not inherit another's.
+            if (skipState.pendingKey !== playback.currentId) return
+            skipState.intervals = segments
+        }
+        function onSubmitted(ok) {
+            submitResult.text = ok ? qsTr("Submitted, thanks!")
+                                    : qsTr("Submit failed")
+        }
+    }
+    function maybeFetchParentalGuide() {
+        if (!appsettings.showParentalGuide || !playback.hasSession) return
+        const key = playback.currentId
+        if (pg.sessionKey === key) return
+        pg.sessionKey = key
+        pg.warnings = []
+        pg.shown = false
+        parental.fetch(key)
+    }
+    Connections {
+        target: parental
+        function onResolved(warnings) {
+            if (warnings.length === 0 || pg.shown) return
+            pg.warnings = warnings
+            pg.shown = true
+        }
+    }
 
     // ---- chrome auto-hide --------------------------------------------------
     // Display-layer convenience ONLY (plan directive: nothing here may
@@ -189,6 +384,241 @@ Item {
         elide: Text.ElideRight
     }
 
+    // Loading overlay (P3a): demuxer-stall indicator, gated by preference.
+    Rectangle {
+        visible: appsettings.showLoadingOverlay && mpv.buffering
+                 && !page.idleChrome
+        anchors.centerIn: parent
+        width: loadingText.width + 32
+        height: loadingText.height + 20
+        radius: Theme.radiusMd
+        color: Theme.chromeScrim
+        Text {
+            id: loadingText
+            anchors.centerIn: parent
+            text: qsTr("Loading…")
+            color: Theme.textPrimary
+            font.pixelSize: 15
+        }
+    }
+
+    // Parental-guide card (P3a): once per session, dismissible, silent
+    // when the lookup fails or returns no warnings.
+    Rectangle {
+        visible: pg.warnings.length > 0 && !page.idleChrome
+        anchors.top: parent.top
+        anchors.topMargin: 16
+        anchors.horizontalCenter: parent.horizontalCenter
+        width: Math.min(parent.width - 64, 480)
+        height: pgCol.height + 24
+        radius: Theme.radiusMd
+        color: Theme.chromeScrim
+        Column {
+            id: pgCol
+            anchors.top: parent.top
+            anchors.topMargin: 12
+            anchors.left: parent.left
+            anchors.leftMargin: 16
+            anchors.right: parent.right
+            anchors.rightMargin: 16
+            spacing: 4
+            Text {
+                text: qsTr("Parental guidance")
+                color: Theme.textPrimary
+                font.pixelSize: 14
+                font.weight: Font.DemiBold
+            }
+            Repeater {
+                model: pg.warnings
+                delegate: Text {
+                    required property var modelData
+                    text: modelData.label + " · " + modelData.severity
+                    color: Theme.textSecondary
+                    font.pixelSize: 13
+                }
+            }
+            Button {
+                text: qsTr("Dismiss")
+                flat: true
+                onClicked: pg.warnings = []
+            }
+        }
+    }
+
+    // Next-episode card (P3a): threshold/outro card with a 3-2-1 auto-play
+    // countdown when enabled, manual Play otherwise. Dismiss per session.
+    Rectangle {
+        visible: (page.cardVisible || nextEp.countdown >= 0)
+                 && !page.idleChrome && nextEp.info
+        anchors.right: parent.right
+        anchors.rightMargin: 24
+        anchors.bottom: bar.top
+        anchors.bottomMargin: 16
+        width: 300
+        height: nextCol.height + 24
+        radius: Theme.radiusMd
+        color: Theme.chromeScrim
+        Column {
+            id: nextCol
+            anchors.top: parent.top
+            anchors.topMargin: 12
+            anchors.left: parent.left
+            anchors.leftMargin: 16
+            anchors.right: parent.right
+            anchors.rightMargin: 16
+            spacing: 6
+            Text {
+                text: qsTr("Up next")
+                color: Theme.textSecondary
+                font.pixelSize: 12
+            }
+            Text {
+                text: nextEp.info
+                      ? qsTr("S%1 E%2 · %3").arg(nextEp.info.season)
+                            .arg(nextEp.info.episode).arg(nextEp.info.name)
+                      : ""
+                color: Theme.textPrimary
+                font.pixelSize: 15
+                font.weight: Font.DemiBold
+                wrapMode: Text.Wrap
+                width: parent.width
+            }
+            Text {
+                visible: nextEp.countdown >= 0
+                text: qsTr("Playing in %1…").arg(
+                    Math.max(nextEp.countdown, 0) + 1)
+                color: Theme.textSecondary
+                font.pixelSize: 13
+            }
+            Row {
+                spacing: Theme.spacingSm
+                Button {
+                    text: nextEp.countdown >= 0 ? qsTr("Play now")
+                                                : qsTr("Play")
+                    onClicked: {
+                        nextEp.countdown = -1
+                        page.playNextEpisode()
+                    }
+                }
+                Button {
+                    text: qsTr("Dismiss")
+                    flat: true
+                    onClicked: page.dismissNextEpisode()
+                }
+            }
+        }
+    }
+
+    // Skip-intro button (P3c): visible inside a known segment; manual
+    // tap seeks past it, auto-skip types jump in the pump instead. Rides
+    // above the next-episode card when both show.
+    Button {
+        visible: page.activeSkip !== null && !page.idleChrome
+        anchors.right: parent.right
+        anchors.rightMargin: 24
+        anchors.bottom: bar.top
+        anchors.bottomMargin: (page.cardVisible || nextEp.countdown >= 0)
+                              ? 220 : 16
+        text: page.activeSkip ? page.segLabel(page.activeSkip.type)
+                              : qsTr("Skip")
+        onClicked: {
+            if (!page.activeSkip) return
+            skipState.lastSkipped = page.skipKey(page.activeSkip)
+            mpv.seekToSeconds(page.activeSkip.endSec)
+        }
+    }
+
+    // IntroDb submit dialog (P3c): user-marked segment for the current tt
+    // episode; needs the submit switch + an API key (key never syncs).
+    property bool submitOpen: false
+    Button {
+        visible: appsettings.introSubmitEnabled
+                 && appsettings.introDbApiKey !== ""
+                 && playback.currentSeason >= 0 && !page.idleChrome
+        anchors.left: parent.left
+        anchors.leftMargin: 24
+        anchors.bottom: bar.top
+        anchors.bottomMargin: 16
+        text: qsTr("Submit intro")
+        onClicked: {
+            submitStart.text = Math.max(0, mpv.positionMs / 1000 - 30)
+            submitEnd.text = mpv.positionMs / 1000 + 60
+            submitResult.text = ""
+            page.submitOpen = true
+        }
+    }
+    Rectangle {
+        visible: page.submitOpen
+        anchors.centerIn: parent
+        width: 340
+        height: submitCol.height + 32
+        radius: Theme.radiusMd
+        color: Theme.chromeScrim
+        border.color: Theme.border
+        border.width: 1
+        Column {
+            id: submitCol
+            anchors.top: parent.top
+            anchors.topMargin: 16
+            anchors.left: parent.left
+            anchors.leftMargin: 16
+            anchors.right: parent.right
+            anchors.rightMargin: 16
+            spacing: 8
+            Text {
+                text: qsTr("Submit intro segment (seconds)")
+                color: Theme.textPrimary
+                font.pixelSize: 15
+                font.weight: Font.DemiBold
+            }
+            Row {
+                spacing: Theme.spacingSm
+                Text {
+                    text: qsTr("Start")
+                    color: Theme.textSecondary
+                    font.pixelSize: 13
+                    anchors.verticalCenter: parent.verticalCenter
+                }
+                TextField {
+                    id: submitStart
+                    width: 100
+                    selectByMouse: true
+                    inputMethodHints: Qt.ImhDigitsOnly
+                }
+                Text {
+                    text: qsTr("End")
+                    color: Theme.textSecondary
+                    font.pixelSize: 13
+                    anchors.verticalCenter: parent.verticalCenter
+                }
+                TextField {
+                    id: submitEnd
+                    width: 100
+                    selectByMouse: true
+                    inputMethodHints: Qt.ImhDigitsOnly
+                }
+            }
+            Text {
+                id: submitResult
+                color: Theme.textSecondary
+                font.pixelSize: 13
+            }
+            Row {
+                spacing: Theme.spacingSm
+                Button {
+                    text: qsTr("Submit")
+                    onClicked: skip.submit(Number(submitStart.text),
+                                           Number(submitEnd.text))
+                }
+                Button {
+                    text: qsTr("Close")
+                    flat: true
+                    onClicked: page.submitOpen = false
+                }
+            }
+        }
+    }
+
     TransportBar {
         id: bar
         mpv: mpv
@@ -202,5 +632,22 @@ Item {
         Behavior on opacity {
             NumberAnimation { duration: Theme.fadeMs; easing.type: Easing.OutQuad }
         }
+        onSourcesPressed: sourcesPanel.visible = !sourcesPanel.visible
+    }
+
+    // Streams scope panel (P3d): reads the resolver cache for the current
+    // key; scope edits apply to future resolutions only.
+    StreamsPanel {
+        id: sourcesPanel
+        visible: false
+        mediaType: playback.currentType
+        mediaId: playback.currentId
+        width: Math.min(parent.width - 48, 420)
+        height: 420
+        anchors.right: parent.right
+        anchors.rightMargin: 24
+        anchors.bottom: bar.top
+        anchors.bottomMargin: 16
+        onClosed: visible = false
     }
 }

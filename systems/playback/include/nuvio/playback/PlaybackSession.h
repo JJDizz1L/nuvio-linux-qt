@@ -27,11 +27,21 @@
 #include <QObject>
 #include <QString>
 
+#include <functional>
+
 namespace nuvio::p2p { class P2pEngine; }
 
 namespace nuvio::playback {
 
 class StreamResolver;
+
+/// Reuse-link policy (Compose StreamDestination parity): when enabled with
+/// a positive cache window, requestPlay serves a fresh cached link instead
+/// of resolving, and direct resolutions refresh the cache.
+struct ReusePolicy {
+    bool enabled = false;
+    int cacheHours = 24;
+};
 
 class PlaybackSession final : public QObject {
     Q_OBJECT
@@ -40,6 +50,13 @@ class PlaybackSession final : public QObject {
     Q_PROPERTY(QString currentType  READ currentType  NOTIFY sessionChanged)
     Q_PROPERTY(QString currentId    READ currentId    NOTIFY sessionChanged)
     Q_PROPERTY(bool    hasSession   READ hasSession   NOTIFY sessionChanged)
+    /// True when the current url is a transient localhost P2P relay (never
+    /// handed to external players or the reuse cache).
+    Q_PROPERTY(bool currentIsLocalRelay READ currentIsLocalRelay
+                   NOTIFY sessionChanged)
+    /// Parsed series position of the current session (-1 for movies).
+    Q_PROPERTY(int currentSeason READ currentSeason NOTIFY sessionChanged)
+    Q_PROPERTY(int currentEpisode READ currentEpisode NOTIFY sessionChanged)
 
 public:
     explicit PlaybackSession(StreamResolver* resolver,
@@ -48,6 +65,13 @@ public:
     /// instead of surfacing playbackUnavailable right away.
     PlaybackSession(StreamResolver* resolver, nuvio::p2p::P2pEngine* p2p,
                     QObject* parent = nullptr);
+
+    using ReusePolicyProvider = std::function<ReusePolicy()>;
+    /// Compose StreamDestination parity (P3a): consult before resolving.
+    void setReusePolicyProvider(ReusePolicyProvider provider)
+    {
+        m_reuseProvider = std::move(provider);
+    }
 
     /// User intent: play this item. Supersedes any earlier pending request.
     Q_INVOKABLE void requestPlay(const QString& type, const QString& imdbId,
@@ -58,6 +82,9 @@ public:
     [[nodiscard]] QString currentType()  const { return m_type; }
     [[nodiscard]] QString currentId()    const { return m_id; }
     [[nodiscard]] bool    hasSession()   const { return !m_url.isEmpty(); }
+    [[nodiscard]] int     currentSeason() const { return m_season; }
+    [[nodiscard]] int     currentEpisode() const { return m_episode; }
+    [[nodiscard]] bool    currentIsLocalRelay() const { return m_isRelay; }
 
 signals:
     /// Direct source resolved - consumer navigates to the player route.
@@ -74,6 +101,7 @@ private:
 
     StreamResolver* m_resolver = nullptr;
     nuvio::p2p::P2pEngine* m_p2p = nullptr;
+    ReusePolicyProvider m_reuseProvider;
     quint64 m_activeToken = 0;
     bool    m_awaitingP2p = false;
 
@@ -87,6 +115,9 @@ private:
     QString m_url;
     QString m_type;
     QString m_id;
+    int m_season = -1;
+    int m_episode = -1;
+    bool m_isRelay = false;
 };
 
 } // namespace nuvio::playback

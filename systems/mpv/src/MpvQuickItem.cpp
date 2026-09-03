@@ -200,6 +200,14 @@ void MpvQuickItem::setTrack(const QString& kind, const int id)
         prop, id > 0 ? QString::number(id) : QStringLiteral("no"));
 }
 
+void MpvQuickItem::setSpeed(const double speed)
+{
+    if (!m_controller) return;
+    const double clamped = std::clamp(speed, 0.01, 100.0);
+    m_controller->setPropertyString(QStringLiteral("speed"),
+                                    QString::number(clamped));
+}
+
 void MpvQuickItem::seekBySeconds(double deltaSec)
 {
     if (!m_controller || !hasMedia()) return;

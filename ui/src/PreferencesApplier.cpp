@@ -16,6 +16,8 @@ PreferencesApplier::PreferencesApplier(
             this, &PreferencesApplier::applyDecoder);
     connect(&settings, &nuvio::settings::AppSettings::subtitleStyleChanged,
             this, &PreferencesApplier::applySubtitles);
+    connect(&settings, &nuvio::settings::AppSettings::playerOptionsChanged,
+            this, &PreferencesApplier::applyResize);
 }
 
 QString PreferencesApplier::mappedHwdec() const
@@ -32,6 +34,7 @@ void PreferencesApplier::applyAll()
     applyDecoder();
     applyCache();
     applySubtitles();
+    applyResize();
 }
 
 /// Subtitle appearance -> mpv live properties (desktop parity: font size in
@@ -61,6 +64,14 @@ void PreferencesApplier::applySubtitles()
                                    : QStringLiteral("no"));
     ctrl->setPropertyString(QStringLiteral("sub-margin-y"),
         QString::number(m_settings->subtitleBottomOffset()));
+    // SDH strip (P3b): mpv's filter pair is the closest native match to
+    // Compose's SubtitleSdhFilter (brackets/parens/speaker labels); the
+    // harder pass covers the parenthesis leg. Verified on-box 2026-09-03.
+    const QString sdh = m_settings->subtitleStripSdh()
+                            ? QStringLiteral("yes")
+                            : QStringLiteral("no");
+    ctrl->setPropertyString(QStringLiteral("sub-filter-sdh"), sdh);
+    ctrl->setPropertyString(QStringLiteral("sub-filter-sdh-harder"), sdh);
 }
 
 /// Compose parity rule (AGENTS.md): forward buffer = user setting;
@@ -92,6 +103,31 @@ void PreferencesApplier::applyDecoder()
     if (hwdec.isEmpty()) return;      // "auto": leave the app default alone
     ctrl->setPropertyString(QStringLiteral("hwdec"), hwdec);
     std::fprintf(stderr, "prefs: hwdec <- %s\n", qPrintable(hwdec));
+}
+
+/// Resize mapping verbatim from the Compose native bridge
+/// (player_bridge.cpp setResizeMode): Stretch drops aspect lock; Fill
+/// keeps aspect with full panscan (crop-to-fill); Fit/Zoom keep aspect
+/// uncropped (Zoom's container half lives outside mpv on both lines).
+void PreferencesApplier::applyResize()
+{
+    auto* ctrl = qobject_cast<nuvio::mpv::MpvController*>(m_mpv);
+    if (!ctrl) return;
+    const QString mode = m_settings->resizeMode();
+    if (mode == QLatin1String("Stretch")) {
+        ctrl->setPropertyString(QStringLiteral("keepaspect"),
+                                QStringLiteral("no"));
+    } else if (mode == QLatin1String("Fill")) {
+        ctrl->setPropertyString(QStringLiteral("keepaspect"),
+                                QStringLiteral("yes"));
+        ctrl->setPropertyString(QStringLiteral("panscan"),
+                                QStringLiteral("1.0"));
+    } else {
+        ctrl->setPropertyString(QStringLiteral("keepaspect"),
+                                QStringLiteral("yes"));
+        ctrl->setPropertyString(QStringLiteral("panscan"),
+                                QStringLiteral("0.0"));
+    }
 }
 
 } // namespace nuvio::ui

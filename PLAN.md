@@ -52,13 +52,43 @@ combo display subset narrowed (stored values still snap full-range in C++).
 Tracking/TMDB/MDBList/notifications leaves deliberately absent — no
 backends yet (P3+ with their features).
 
-## P3 — Player depth
+## P3 — Player depth ✅ DONE 2026-09-03 (32/32 ctest, boot clean, keytest 4/4, smoke PASS vaapi-copy)
 
-Next-episode autoplay continuation (threshold mode/percent/minutes);
-subtitle engine (SDH strip, show-only-preferred); resize mode;
-hold-to-speed; loading overlay; parental-guide gate; skip-intro/AnimeSkip/
-IntroDb client + button + submit; external-player launcher; `StreamsPanel`/
-`NextEpisodePopup`; binge-group/reuse linkage. Keytest 4/4 + smoke PASS.
+- **Behaviors.** `NextEpisodeRules` pure (ordered continuation, threshold/
+  outro card with Compose clamps, aired compare, tt/composite helpers) +
+  `NextEpisodeHelper` QML bridge (`nextep`); VideoPage card with 3-2-1
+  countdown when auto-play is on, manual Play otherwise; episode-list
+  snapshot from the shell (hover-proof). Reuse-link cache
+  (`StreamLinkCache`: contentKey/hash/credential-table/freshness verbatim,
+  profile-suffixed keys live-proven) wired into `PlaybackSession` (fast
+  path + refresh on direct; torrent relays never cached) + S/E props.
+  Resize via verbatim bridge mapping in the applier; hold-to-speed
+  (`MpvQuickItem::setSpeed` + transport hold button, restores 1.0 on
+  release/leave); loading overlay on `buffering`; parental guide
+  (`ParentalGuideResolver`, tiffara, dominant-severity + severe-first top-5,
+  once-per-session card).
+- **Subtitle engine.** `sub-filter-sdh` + `harder` from the strip pref
+  (verified on-box); Subs menu show-only-preferred display filter
+  (preferred + selected stay; exact/region-prefix subset documented —
+  full alias tables stay in the C++ auto-selector).
+- **Skip-intro.** `SkipResolver` (IntroDb configurable via
+  `NUVIO_INTRODB_URL`, blank-disabled like Compose; AniSkip by MAL id;
+  kitsu:/anilist need Simkl — honest empty; category-priority merge;
+  per-key cache; single-flight + 15 s partial guard; submit with Bearer
+  key); VideoPage button + pump auto-skip (category-normalized, once per
+  segment) + submit dialog (needs switch + key; key never syncs).
+- **External + StreamsPanel.** TransportBar External button (direct urls
+  only — `currentIsLocalRelay` gates localhost relays; forwarding/skip
+  handoff deferred); `StreamsPanel` (resolver `allStreams` + `addonName`,
+  Compose empty-set-means-all scope checkboxes normalizing back to empty,
+  future-resolutions-only note).
+- Simplifications recorded: continuation reuses the best-pick resolver
+  (no binge-group data yet — P4); no released dates ride episode rows so
+  the aired gate treats unknown as aired (Compose default).
+- TEST-LATER (user-deferred visual/live passes): skip fetch end-to-end
+  (real anime id + network at watch time), parental fetch card, reuse-hit
+  playback, next-episode popup + countdown, hold-to-speed feel, StreamsPanel
+  scope edits affecting a later autoplay pick.
 
 ## P4 — Home depth
 

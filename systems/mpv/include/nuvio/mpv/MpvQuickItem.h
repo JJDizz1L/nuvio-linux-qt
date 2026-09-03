@@ -101,6 +101,10 @@ public slots:
     /// (mpv `set aid/sid no`). Issues explicit selection, never alang/slang.
     Q_INVOKABLE void setTrack(const QString& kind, int id);
 
+    /// Transient playback speed for hold-to-speed (mpv `set speed`; range
+    /// mirrors mpv's 0.01..100). Not persisted - release restores 1.0.
+    Q_INVOKABLE void setSpeed(double speed);
+
 signals:
     void controllerChanged();
     void hasMediaChanged();

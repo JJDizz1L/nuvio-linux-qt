@@ -188,6 +188,12 @@ ApplicationWindow {
                       .arg(parseInt(parts[2], 10))
                       .arg(title)
                 : title
+            // Episode-list snapshot for next-episode continuation (P3a):
+            // series only; a snapshot because hover previews mutate meta.
+            pageItem.episodeList = (isEpisode && typeof meta !== "undefined"
+                                    && meta.current
+                                    && meta.current.videos)
+                ? meta.current.videos : []
             pageItem.launchMedia(url, "", resumeMs)
         }
         // Unavailable results are surfaced by LibraryPage's toast.

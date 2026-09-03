@@ -37,6 +37,9 @@
 #include "nuvio/library/CatalogService.h"
 #include "nuvio/library/MetaService.h"
 #include "nuvio/playback/PlaybackSession.h"
+#include "nuvio/playback/NextEpisodeHelper.h"
+#include "nuvio/playback/ParentalGuide.h"
+#include "nuvio/playback/SkipResolver.h"
 #include "nuvio/playback/StreamResolver.h"
 #include "nuvio/p2p/P2pEngine.h"
 #include "nuvio/p2p/TorrServerProcess.h"
@@ -296,6 +299,14 @@ int main(int argc, char* argv[])
     auto playbackSession =
         std::make_unique<nuvio::playback::PlaybackSession>(
             streamResolver.get(), p2pEngine.get());
+    // Reuse-link fast path (P3a): fresh cached direct links skip
+    // resolution; direct resolutions refresh the cache in-session.
+    playbackSession->setReusePolicyProvider([sp = settings.get()] {
+        nuvio::playback::ReusePolicy p;
+        p.enabled = sp->streamReuseLastLinkEnabled();
+        p.cacheHours = sp->streamReuseLastLinkCacheHours();
+        return p;
+    });
     // MPRIS: desktop media keys / playerctl / shell widgets drive the same
     // queued command surface as everything else (new capability, plan P3).
     auto mpris = std::make_unique<nuvio::integrations::MprisService>(
@@ -347,6 +358,37 @@ int main(int argc, char* argv[])
     engine.rootContext()->setContextProperty(
         QStringLiteral("playback"), QVariant::fromValue<QObject*>(
                                         playbackSession.get()));
+    // Next-episode card rules + parental-guide lookup (P3a player behaviors).
+    auto nextEpHelper =
+        std::make_unique<nuvio::playback::NextEpisodeHelper>();
+    engine.rootContext()->setContextProperty(
+        QStringLiteral("nextep"), QVariant::fromValue<QObject*>(
+                                      nextEpHelper.get()));
+    auto parentalGuide =
+        std::make_unique<nuvio::playback::ParentalGuideResolver>();
+    engine.rootContext()->setContextProperty(
+        QStringLiteral("parental"), QVariant::fromValue<QObject*>(
+                                        parentalGuide.get()));
+    // Skip-intro resolution (P3c): IntroDb base URL rides the env (Compose
+    // bakes "" by default — blank disables the leg on both lines).
+    auto skipResolver = std::make_unique<nuvio::playback::SkipResolver>();
+    nuvio::playback::SkipResolver::Providers skipProviders;
+    skipProviders.skipIntroEnabled = [sp = settings.get()] {
+        return sp->skipIntroEnabled();
+    };
+    skipProviders.introDbBaseUrl = [] {
+        return qEnvironmentVariable("NUVIO_INTRODB_URL");
+    };
+    skipProviders.introDbApiKey = [sp = settings.get()] {
+        return sp->introDbApiKey();
+    };
+    skipProviders.introSubmitEnabled = [sp = settings.get()] {
+        return sp->introSubmitEnabled();
+    };
+    skipResolver->setProviders(std::move(skipProviders));
+    engine.rootContext()->setContextProperty(
+        QStringLiteral("skip"), QVariant::fromValue<QObject*>(
+                                    skipResolver.get()));
     engine.rootContext()->setContextProperty(
         QStringLiteral("p2p"), QVariant::fromValue<QObject*>(
                                    p2pEngine.get()));

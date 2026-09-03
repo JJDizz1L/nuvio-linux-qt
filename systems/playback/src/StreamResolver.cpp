@@ -119,8 +119,7 @@ QVariantMap StreamResolver::bestFor(const QString& type,
 }
 
 QVariantMap StreamResolver::bestTorrent(const QString& type,
-                                        const QString& imdbId) const
-{
+                                        const QString& imdbId) const{
     const QString key = type + QLatin1Char('/') + imdbId;
     const auto perAddon = m_results.value(key);
 
@@ -133,6 +132,31 @@ QVariantMap StreamResolver::bestTorrent(const QString& type,
                 return toVariant(s);
     }
     return {};
+}
+
+QString StreamResolver::addonName(const QString& addonId) const
+{
+    return m_addons.value(addonId).name;
+}
+
+QVariantList StreamResolver::allStreams(const QString& type,
+                                        const QString& imdbId) const
+{
+    const QString key = type + QLatin1Char('/') + imdbId;
+    const auto perAddon = m_results.value(key);
+    QVariantList out;
+    for (const auto& addonId : m_addonOrder) {
+        const auto it = perAddon.find(addonId);
+        if (it == perAddon.end()) continue;
+        for (const auto& s : *it) {
+            QVariantMap m = toVariant(s);
+            m.insert(QStringLiteral("sourceName"),
+                     m_addons.value(addonId).name);
+            m.insert(QStringLiteral("torrent"), !s.infoHash.isEmpty());
+            out.append(m);
+        }
+    }
+    return out;
 }
 
 int StreamResolver::expectedAddons(const QString&) const

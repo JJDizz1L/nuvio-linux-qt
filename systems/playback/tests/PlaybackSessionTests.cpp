@@ -7,7 +7,9 @@
 
 #include <QCoreApplication>
 #include <QDeadlineTimer>
+#include <QDir>
 #include <QEventLoop>
+#include <QTemporaryDir>
 #include <cstdio>
 
 using nuvio::playback::PlaybackSession;
@@ -53,6 +55,14 @@ struct Capture {
 int main(int argc, char** argv)
 {
     QCoreApplication app(argc, argv);
+
+    // ISOLATION: the session writes the reuse-link cache on direct
+    // resolutions - keep it inside a temp profile, never the live one.
+    QTemporaryDir sandbox;
+    if (!sandbox.isValid()) return 2;
+    qputenv("XDG_CONFIG_HOME",
+            QDir(sandbox.path()).filePath("cfg").toUtf8());
+    QDir().mkpath(QString::fromUtf8(qgetenv("XDG_CONFIG_HOME")));
 
     const QByteArray bodyDirectA =
         R"({"streams":[{"title":"1080p",)"
@@ -177,8 +187,59 @@ int main(int argc, char** argv)
         CHECK(!lonely.hasSession(), "no phantom session");
     }
 
+    { // P3a: reuse-link fast path serves fresh cache without resolving,
+      // and direct resolutions refresh the cache + parse S/E.
+        using nuvio::playback::ReusePolicy;
+        session.setReusePolicyProvider([] { return ReusePolicy{true, 24}; });
+
+        // tt100 resolved directly above (cache-hit block): its link is now
+        // cached. A resolver with NO data must still play from the cache.
+        StreamResolver empty;
+        PlaybackSession cached(&empty);
+        cached.setReusePolicyProvider([] { return ReusePolicy{true, 24}; });
+        Capture capReuse;
+        capReuse.attach(cached);
+        const int readyB4 = capReuse.ready;
+        cached.requestPlay("movie", "tt100", "Cached Replay");
+        CHECK(capReuse.ready == readyB4 + 1 &&
+                  capReuse.lastReadyUrl == "https://cdn.example/a.mkv",
+              "fresh cached link plays without resolution");
+        CHECK(cached.currentSeason() == -1 && cached.currentEpisode() == -1,
+              "movie session has no S/E");
+        CHECK(!cached.currentIsLocalRelay(),
+              "direct session is not a relay");
+
+        // Episode-aware keys: resolve an episode, replay from a bare
+        // resolver, verify S/E parse + episode-scoped cache hit.
+        r.applyAddonStreams("series/tt700:1:2", "alpha", bodyDirectA);
+        r.applyAddonStreams("series/tt700:1:2", "beta", bodyEmpty);
+        session.requestPlay("series", "tt700:1:2", "Ep Replay");
+        CHECK(session.currentSeason() == 1 && session.currentEpisode() == 2,
+              "session parses composite S/E");
+        PlaybackSession cachedEp(&empty);
+        cachedEp.setReusePolicyProvider([] { return ReusePolicy{true, 24}; });
+        Capture capEp;
+        capEp.attach(cachedEp);
+        cachedEp.requestPlay("series", "tt700:1:2", "Ep Replay");
+        CHECK(capEp.ready == 1 &&
+                  capEp.lastReadyUrl == "https://cdn.example/a.mkv",
+              "episode-scoped cache hit");
+        CHECK(cachedEp.currentSeason() == 1 &&
+                  cachedEp.currentEpisode() == 2,
+              "cached episode session parses S/E");
+
+        // Disabled policy never consults the cache.
+        PlaybackSession off(&empty);
+        off.setReusePolicyProvider([] { return ReusePolicy{false, 24}; });
+        Capture capOff;
+        capOff.attach(off);
+        off.requestPlay("movie", "tt100", "No Reuse");
+        CHECK(capOff.unavail == 1 && capOff.ready == 0,
+              "disabled reuse policy resolves normally (empty -> toast)");
+    }
+
     std::printf(failures ? "SESSION SUITE FAILURES=%d\n"
                          : "SESSION SUITE OK (%d failures)\n",
-                failures);
+                 failures);
     return failures ? 1 : 0;
 }

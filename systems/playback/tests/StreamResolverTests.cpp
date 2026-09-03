@@ -106,6 +106,25 @@ int main(int argc, char** argv)
               "no torrents stored -> empty map");
     }
 
+    { // P3d: allStreams listing + addon display names for the scope panel
+        const auto rows = r.allStreams("movie", "tt0111161");
+        CHECK(rows.size() == 3, "torrent + direct + direct rows listed");
+        CHECK(rows[0].toMap().value("source").toString() == "torrentio",
+              "addon order kept");
+        CHECK(rows[0].toMap().value("sourceName").toString() == "Torrentio",
+              "display name resolved");
+        CHECK(rows[0].toMap().value("torrent").toBool() == true,
+              "torrent row flagged");
+        CHECK(rows[1].toMap().value("torrent").toBool() == false,
+              "direct row not flagged");
+        CHECK(rows[2].toMap().value("sourceName").toString() == "DirectAdd",
+              "second addon named");
+        CHECK(r.addonName("torrentio") == "Torrentio", "name lookup");
+        CHECK(r.addonName("nope") == "", "unknown id -> empty");
+        CHECK(r.allStreams("movie", "unseen").isEmpty(),
+              "unresolved key lists nothing");
+    }
+
     { // isComplete mirrors per-key completeness only
         StreamResolver solo;
         solo.setAddons(QVariantList{QVariantMap{

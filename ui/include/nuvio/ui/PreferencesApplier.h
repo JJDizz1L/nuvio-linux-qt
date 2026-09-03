@@ -39,6 +39,7 @@ private slots:
     void applyDecoder();
     void applySubtitles();
     void applyCache();
+    void applyResize();
 
 private:
     [[nodiscard]] QString mappedHwdec() const;

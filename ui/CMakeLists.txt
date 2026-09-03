@@ -31,6 +31,7 @@ qt_add_resources(nuvio_ui nuvio_qml
         qml/pages/SettingsIntegrationsPage.qml
         qml/pages/SettingsAccountPage.qml
         qml/components/TransportBar.qml
+        qml/components/StreamsPanel.qml
         assets/fonts/jetbrains_sans_regular.ttf
         assets/fonts/jetbrains_sans_semibold.ttf
         assets/fonts/jetbrains_sans_bold.ttf)

@@ -53,6 +53,13 @@ public:
 
     Q_INVOKABLE void setAddons(const QVariantList& addons); // {id,name,url}
     Q_INVOKABLE QStringList addonIds() const { return m_addonOrder; }
+    /// Display name for an addon id ("" when unknown).
+    Q_INVOKABLE QString addonName(const QString& addonId) const;
+    /// All cached streams for the key in addon order, each
+    /// {source,sourceName,title,playable,torrent}. Empty until addons
+    /// answer. Powers the P3d StreamsPanel scope UI.
+    Q_INVOKABLE QVariantList allStreams(const QString& type,
+                                        const QString& imdbId) const;
 
     /// Kick resolution for type+id across all configured addons. Cached
     /// bodies answer synchronously via streamResolved after next event-loop
