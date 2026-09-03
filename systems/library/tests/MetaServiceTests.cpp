@@ -3,6 +3,8 @@
 #include <nuvio/library/MetaService.h>
 
 #include <QCoreApplication>
+#include <QDir>
+#include <QTemporaryDir>
 #include <cstdio>
 
 using nuvio::library::MetaService;
@@ -18,6 +20,13 @@ static int failures = 0;
 int main(int argc, char** argv)
 {
     QCoreApplication app(argc, argv);
+
+    // ISOLATION: seasonViewMode persists to the profile - sandbox it.
+    QTemporaryDir sandbox;
+    if (!sandbox.isValid()) return 2;
+    qputenv("XDG_CONFIG_HOME",
+            QDir(sandbox.path()).filePath("cfg").toUtf8());
+    QDir().mkpath(QString::fromUtf8(qgetenv("XDG_CONFIG_HOME")));
 
     const QByteArray body =
         "{\n"
@@ -53,7 +62,6 @@ int main(int argc, char** argv)
     const QStringList cast = m.value("cast").toStringList();
     CHECK(cast.size() == 2 && cast[1] == "Emilia Clarke",
           "cast handles strings and {name} objects");
-
     // Episode ordering + both id shapes parsed (season/episode fields were
     // deliberately poisoned on the modern entry to force id parsing).
     const QVariantList eps = m.value("videos").toList();
@@ -79,6 +87,55 @@ int main(int argc, char** argv)
           "non-tt ids rejected (imdb-only parity)");
     CHECK(MetaService::metaFromJson("not json at all").isEmpty(),
           "malformed body -> empty map, never partial model");
+
+    { // P6 info depth: crew/awards/country/imdb link ride the map
+        const QByteArray crew =
+            "{\n"
+            "  \"meta\": {\n"
+            "    \"id\": \"tt0111161\",\n"
+            "    \"type\": \"movie\",\n"
+            "    \"name\": \"The Shawshank Redemption\",\n"
+            "    \"director\": [\"Frank Darabont\"],\n"
+            "    \"writer\": [\"Stephen King\", \"Frank Darabont\"],\n"
+            "    \"awards\": \"Nominated for 7 Oscars.\",\n"
+            "    \"country\": \"United States\",\n"
+            "    \"links\": [{\"name\": \"9.3\", \"category\": \"imdb\","
+            " \"url\": \"https://imdb.com/title/tt0111161\"},\n"
+            "     {\"name\": \"Share\", \"category\": \"share\","
+            " \"url\": \"https://www.strem.io/s/movie/x\"}]\n"
+            "  }\n"
+            "}";
+        const QVariantMap d = MetaService::metaFromJson(crew);
+        CHECK(!d.isEmpty(), "crew body parses");
+        CHECK(d.value("director").toStringList() == QStringList{"Frank Darabont"},
+              "director carried");
+        CHECK(d.value("writer").toStringList().size() == 2,
+              "writer carried");
+        CHECK(d.value("awards").toString() == "Nominated for 7 Oscars.",
+              "awards carried");
+        CHECK(d.value("country").toString() == "United States",
+              "country carried");
+        CHECK(d.value("imdbLink").toString() ==
+                  "https://imdb.com/title/tt0111161",
+              "imdb link resolved by category");
+        const QVariantMap bare = MetaService::metaFromJson(
+            "{\"meta\":{\"id\":\"tt1\",\"type\":\"movie\"}}");
+        CHECK(bare.value("director").toStringList().isEmpty() &&
+                  bare.value("imdbLink").toString().isEmpty(),
+              "absent info degrades to empty, never garbage");
+    }
+
+    { // Season view mode: posters default, toggle round-trips persisted
+        MetaService svc;
+        CHECK(svc.seasonViewMode() == "posters", "posters default");
+        svc.toggleSeasonViewMode();
+        CHECK(svc.seasonViewMode() == "text", "toggle flips to text");
+        MetaService view;
+        CHECK(view.seasonViewMode() == "text", "mode persists");
+        view.setSeasonViewMode("BOGUS");
+        CHECK(view.seasonViewMode() == "posters",
+              "unknown values fall back to posters");
+    }
 
     std::printf(failures ? "META SUITE FAILURES=%d\n"
                          : "META SUITE OK (%d failures)\n",

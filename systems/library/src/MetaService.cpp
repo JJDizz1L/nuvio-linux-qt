@@ -11,6 +11,8 @@
 #include <algorithm>
 #include <cstdio>
 
+#include "nuvio/settings/PropertiesStore.h"
+
 namespace nuvio::library {
 
 namespace {
@@ -91,6 +93,37 @@ void MetaService::setLoading(bool v)
     emit loadingChanged();
 }
 
+QString MetaService::seasonViewMode() const
+{
+    nuvio::settings::PropertiesStore store(
+        nuvio::settings::PropertiesStore::defaultPath("season_view_mode"));
+    const auto raw = store.getString("season_view_mode_1");
+    if (!raw) return QStringLiteral("posters");   // Compose default
+    const QString v = QString::fromStdString(*raw).toLower();
+    return v == QLatin1String("text") ? QStringLiteral("text")
+                                      : QStringLiteral("posters");
+}
+
+void MetaService::setSeasonViewMode(const QString& mode)
+{
+    const QString v =
+        mode.compare(QLatin1String("text"), Qt::CaseInsensitive) == 0
+            ? QStringLiteral("text")
+            : QStringLiteral("posters");
+    if (seasonViewMode() == v) return;
+    nuvio::settings::PropertiesStore store(
+        nuvio::settings::PropertiesStore::defaultPath("season_view_mode"));
+    store.putString("season_view_mode_1", v.toStdString());
+    emit seasonViewModeChanged();
+}
+
+void MetaService::toggleSeasonViewMode()
+{
+    setSeasonViewMode(seasonViewMode() == QLatin1String("text")
+                          ? QStringLiteral("posters")
+                          : QStringLiteral("text"));
+}
+
 void MetaService::publish(const QVariantMap& map)
 {
     m_current = map;
@@ -141,6 +174,27 @@ QVariantMap MetaService::metaFromJson(const QByteArray& body)
                stringListOr(meta.value(QLatin1String("genres"))));
     out.insert(QStringLiteral("cast"),
                stringListOr(meta.value(QLatin1String("cast"))));
+    // P6 info depth (all native Cinemeta fields): crew, awards, country,
+    // and the IMDb link (links[] entry with category "imdb").
+    out.insert(QStringLiteral("director"),
+               stringListOr(meta.value(QLatin1String("director"))));
+    out.insert(QStringLiteral("writer"),
+               stringListOr(meta.value(QLatin1String("writer"))));
+    out.insert(QStringLiteral("awards"),
+               meta.value(QLatin1String("awards")).toString());
+    out.insert(QStringLiteral("country"),
+               meta.value(QLatin1String("country")).toString());
+    QString imdbLink;
+    for (const auto& v : meta.value(QLatin1String("links")).toArray()) {
+        const QJsonObject l = v.toObject();
+        if (l.value(QLatin1String("category"))
+                .toString()
+                .compare(QLatin1String("imdb"), Qt::CaseInsensitive) == 0) {
+            imdbLink = l.value(QLatin1String("url")).toString();
+            break;
+        }
+    }
+    out.insert(QStringLiteral("imdbLink"), imdbLink);
 
     // Trailers: [{source:"youtube", key:"..."}] normalized; other
     // providers pass through untouched so the UI can filter.

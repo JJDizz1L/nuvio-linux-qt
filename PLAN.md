@@ -139,10 +139,19 @@ backends yet (P3+ with their features).
   previews on the new rails (library cinemeta rails keep theirs);
   `collection_mobile_settings` stays blob-passthrough (no mobile UI).
 
-## P6 — Details depth
+## P6 — Details depth ✅ DONE 2026-09-03 (36/36 ctest, boot clean, smoke PASS vaapi-copy)
 
-Cast/comments/ratings/production/poster-rails in `MetaService` + `MetaPage`;
-`PersonPage` + `EntityBrowsePage` routes in `NavigationModel`; season modes.
+- **Parse.** `metaFromJson` gains director/writer/awards/country/imdbLink
+  (links[] category match); `seasonViewMode` property on MetaService
+  (posters default, toggle, profile-scoped `season_view_mode_1` parity).
+- **UI.** MetaPage: crew lines, awards/country line, cast rail
+  (display-only chips), IMDb button, season Posters/Text toggle with
+  compact text rows.
+- Deferred with reasons (no guessing): comments (Trakt backend),
+  person detail (TMDB-backed), entity browse (TMDB), more-like-this
+  (TMDB/TRAKT sources only), production companies/networks (TMDB
+  enrichment), external ratings beyond IMDb (Trakt/MDBList). All ride
+  the tracking/TMDB backlog, not this phase.
 
 ## P7 — Profiles full switcher (last partial)
 

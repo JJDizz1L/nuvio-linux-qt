@@ -225,6 +225,69 @@ Item {
                 elide: Text.ElideRight
             }
 
+            // P6 info depth: crew, awards/country, cast rail, IMDb link.
+            // Person pages need the TMDB backend (deferred) so cast names
+            // are display-only here.
+            Text {
+                visible: (cur.director || []).length > 0
+                text: qsTr("Director: %1").arg(
+                    (cur.director || []).join(", "))
+                color: Theme.textSecondary
+                font.pixelSize: 13
+                wrapMode: Text.Wrap
+                width: parent.width
+            }
+            Text {
+                visible: (cur.writer || []).length > 0
+                text: qsTr("Writers: %1").arg(
+                    (cur.writer || []).join(", "))
+                color: Theme.textSecondary
+                font.pixelSize: 13
+                wrapMode: Text.Wrap
+                width: parent.width
+            }
+            Text {
+                visible: (cur.awards || "").length > 0
+                         || (cur.country || "").length > 0
+                text: [cur.awards || "", cur.country || ""]
+                    .filter(function(s){ return String(s).length > 0 })
+                    .join("   ·   ")
+                color: Theme.textSecondary
+                font.pixelSize: 13
+                wrapMode: Text.Wrap
+                width: parent.width
+            }
+            Text {
+                visible: (cur.cast || []).length > 0
+                text: qsTr("Cast")
+                color: Theme.textPrimary
+                font.pixelSize: 15
+                font.weight: Font.DemiBold
+            }
+            ListView {
+                visible: (cur.cast || []).length > 0
+                width: parent.width
+                height: 34
+                clip: true
+                orientation: ListView.Horizontal
+                spacing: Theme.spacingSm
+                model: cur.cast || []
+                delegate: Rectangle {
+                    required property var modelData
+                    height: 30
+                    width: castName.width + 24
+                    radius: 15
+                    color: Theme.surface
+                    Text {
+                        id: castName
+                        anchors.centerIn: parent
+                        text: modelData
+                        color: Theme.textPrimary
+                        font.pixelSize: 13
+                    }
+                }
+            }
+
             Button {
                 visible: !isSeries && imdbId.length > 0
                 text: watching.isWatched(type, imdbId)
@@ -290,6 +353,13 @@ Item {
                 onClicked: detail.playTrailer()
             }
 
+            Button {
+                visible: (cur.imdbLink || "").length > 0
+                flat: true
+                text: qsTr("IMDb ↗")
+                onClicked: Qt.openUrlExternally(cur.imdbLink)
+            }
+
             ComboBox {
                 visible: isSeries && seasons.length > 1
                 width: 220
@@ -300,6 +370,15 @@ Item {
                     ? Math.min(detail.seasonIndex,
                                detail.seasons.length - 1) : 0
                 onActivated: function(i) { detail.seasonIndex = i }
+            }
+
+            // Season view mode (Compose parity: posters/text, persisted).
+            Button {
+                visible: isSeries && videos.length > 0
+                flat: true
+                text: meta.seasonViewMode === "text"
+                      ? qsTr("⊞ Posters") : qsTr("☰ Text")
+                onClicked: meta.toggleSeasonViewMode()
             }
 
             ListView {
@@ -315,7 +394,7 @@ Item {
                 delegate: Item {
                     required property var modelData
                     width: ListView.view.width
-                    height: 66
+                    height: meta.seasonViewMode === "text" ? 40 : 66
 
                     Rectangle {
                         anchors.fill: parent
@@ -332,6 +411,8 @@ Item {
                     }
                     Image {
                         id: epThumb
+                        visible: meta.seasonViewMode !== "text"
+                                 && (modelData.thumb || "").length > 0
                         x: Theme.spacingMd
                         anchors.verticalCenter: parent.verticalCenter
                         width: 104
@@ -340,7 +421,6 @@ Item {
                         asynchronous: true
                         clip: true
                         source: modelData.thumb || ""
-                        visible: source.length > 0
                     }
                     Column {
                         x: (epThumb.visible
@@ -358,13 +438,13 @@ Item {
                             elide: Text.ElideRight
                         }
                         Text {
+                            visible: meta.seasonViewMode !== "text"
                             width: parent.width
                             text: modelData.description || ""
                             color: Theme.textSecondary
                             font.pixelSize: 11
                             maximumLineCount: 1
                             elide: Text.ElideRight
-                            visible: text.length > 0
                         }
                     }
                     Text {

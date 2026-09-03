@@ -35,6 +35,10 @@ class MetaService final : public QObject {
     Q_PROPERTY(QVariantMap current   READ current   NOTIFY currentChanged)
     Q_PROPERTY(bool         loading  READ loading  NOTIFY loadingChanged)
     Q_PROPERTY(QString      lastError READ lastError NOTIFY lastErrorChanged)
+    /// Episode-list presentation (Compose SeasonViewMode parity:
+    /// "posters"|"text", persisted profile-scoped).
+    Q_PROPERTY(QString seasonViewMode READ seasonViewMode
+                   WRITE setSeasonViewMode NOTIFY seasonViewModeChanged)
 
 public:
     explicit MetaService(QObject* parent = nullptr);
@@ -43,6 +47,10 @@ public:
     /// displayName seeds the UI until the network answer lands.
     Q_INVOKABLE void load(const QString& type, const QString& imdbId,
                           const QString& displayName = QString());
+    Q_INVOKABLE void toggleSeasonViewMode();
+
+    [[nodiscard]] QString seasonViewMode() const;
+    void setSeasonViewMode(const QString& mode);
 
     [[nodiscard]] QVariantMap current() const { return m_current; }
     [[nodiscard]] bool        loading() const { return m_loading; }
@@ -56,6 +64,7 @@ signals:
     void currentChanged();
     void loadingChanged();
     void lastErrorChanged();
+    void seasonViewModeChanged();
 
 private:
     void publish(const QVariantMap& map);
