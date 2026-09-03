@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cstdlib>
+#include <limits>
 
 #include "nuvio/settings/SyncPlayerSettings.h"
 #include <nuvio/settings/PropertiesStore.h>
@@ -14,12 +15,43 @@ namespace nuvio::settings {
 // + value format the Compose line writes, so the two builds (and later the
 // remote profile sync) read/write one truth:
 //
-//   player_settings.properties  (ProfileScopedKey => "<key>_1")
-//     preferred_audio_language        String  ("default"|"device"|"original"|code)
-//     preferred_subtitle_language     String  ("none"|"device"|"forced"|code)
-//     subtitle_use_forced_subtitles   Boolean
-//     stream_cache_size               String  ("MB_64"|"MB_256"|"MB_512"|"GB_1"|"GB_2")
-//     decoder_priority                Int     (0 device-only | 1 prefer-device | 2 prefer-app)
+//   player_settings.properties  (ProfileScopedKey => "<key>_1"; P1a covers
+//     the full Linux-meaningful Compose sync-key set — ground truth
+//     PlayerSettingsStorage.desktop.kt syncKeys minus android_*/ios_*):
+//     show_loading_overlay Boolean(true) / show_parental_guide Boolean(true)
+//     resize_mode String(Fit|Fill|Zoom|Stretch)
+//     hold_to_speed_enabled Boolean(true) / hold_to_speed_value Float(2.0)
+//     touch_gestures_enabled Boolean(true, storage-only on desktop Qt)
+//     external_player_enabled/forward_subtitles/send_skip_segments Boolean(false)
+//     external_player_id String(system = desktop default)
+//     preferred_audio_language String(device) / secondary_* ("" = unset/null)
+//     preferred_subtitle_language String(none) / secondary_* ("" = unset/null)
+//     subtitle_text_color #FFFFFFFF / background #00000000 / outline #FF000000
+//     subtitle_outline_enabled Boolean(true) / outline_width Int(2)
+//     subtitle_bold Boolean(false) / font_size_sp Int(18, clamp 6..40)
+//     subtitle_bottom_offset Int(20) / strip_sdh Boolean(false)
+//     subtitle_use_forced_subtitles Boolean(false = Compose DEFAULT)
+//     subtitle_show_only_preferred_languages Boolean(false)
+//     addon_subtitle_startup_mode String(FAST_STARTUP, live-adopted default)
+//     stream_reuse_last_link_enabled Boolean(false) / cache_hours Int(24)
+//     decoder_priority Int(0|1|2) / stream_cache_size enum (slider MB mapping)
+//     map_dv7_to_hevc Boolean(false) / tunneling_enabled Boolean(false)
+//     stream_auto_play_mode String / source String(+ENABLED_PLUGINS_ONLY)
+//     stream_auto_play_selected_addons/plugins StringSet(JSON, sorted)
+//     stream_auto_play_regex String("") / timeout_seconds Int(3, snapped incl MAX)
+//     skip_intro_enabled Boolean(true) / auto_skip_segment_types StringSet
+//     animeskip_enabled Boolean(false) / animeskip_client_id String("")
+//     introdb_api_key String("") CREDENTIAL: stored, never exported
+//     intro_submit_enabled Boolean(false)
+//     stream_auto_play_next_episode_enabled Boolean(false)
+//     stream_auto_play_next_episode_fallback_enabled Boolean(true)
+//     stream_auto_play_prefer_binge_group Boolean(true)
+//     stream_auto_play_reuse_binge_group Boolean(true)
+//     next_episode_threshold_mode String(PERCENTAGE|MINUTES_BEFORE_END)
+//     next_episode_threshold_percent_v2 Float(99)
+//     next_episode_threshold_minutes_before_end_v2 Float(2)
+//     use_libass Boolean(false) / libass_render_type String(CUES)
+//     nvidia_rtx_super_resolution_enabled Boolean(false, key parity only)
 //   discord_settings.properties
 //     discord_enabled                 Boolean
 //   torrent_settings.properties
@@ -250,7 +282,7 @@ bool AppSettings::useForcedSubtitles() const
     }
     return m_store->player
         .getBoolean(profileScoped("subtitle_use_forced_subtitles"))
-        .value_or(true);
+        .value_or(false);   // Compose SubtitleStyleState.DEFAULT = false
 }
 
 void AppSettings::setUseForcedSubtitles(bool v)
@@ -370,9 +402,14 @@ namespace {
 const char* const kAutoPlayModes[] = {"MANUAL", "FIRST_STREAM",
                                       "REGEX_MATCH"};
 const char* const kAutoPlaySources[] = {"ALL_SOURCES",
-                                        "INSTALLED_ADDONS_ONLY"};
+                                        "INSTALLED_ADDONS_ONLY",
+                                        "ENABLED_PLUGINS_ONLY"};
+// Compose STREAM_AUTO_PLAY_TIMEOUT_VALUES + Int.MAX_VALUE ("no timeout").
+// Ties break to the lower value; negatives snap to 0 (verbatim port of
+// snapToAllowedTimeout; subtraction order avoids INT_MIN overflow).
 const int kAutoPlayTimeouts[] = {0, 1, 2, 3, 4, 5,
-                                 6, 7, 8, 9, 10, 15, 20, 25, 30};
+                                 6, 7, 8, 9, 10, 15, 20, 25, 30,
+                                 std::numeric_limits<int>::max()};
 
 [[nodiscard]] bool oneOf(const QString& v, const char* const* list, int n)
 {
@@ -383,11 +420,14 @@ const int kAutoPlayTimeouts[] = {0, 1, 2, 3, 4, 5,
 
 [[nodiscard]] int snapTimeout(int v)
 {
-    int best = 0;
-    int bestDist = -1;
+    if (v <= 0) return 0;
+    int best = kAutoPlayTimeouts[0];
+    long long bestDist = std::numeric_limits<long long>::max();
     for (int allowed : kAutoPlayTimeouts) {
-        const int d = std::abs(allowed - v);
-        if (bestDist < 0 || d < bestDist) {
+        const long long a = static_cast<long long>(allowed);
+        const long long b = static_cast<long long>(v);
+        const long long d = a > b ? a - b : b - a;
+        if (d < bestDist) {
             best = allowed;
             bestDist = d;
         }
@@ -419,12 +459,12 @@ QString AppSettings::streamAutoPlaySource() const
         profileScoped("stream_auto_play_source"));
     if (!raw) return QStringLiteral("ALL_SOURCES");
     const QString v = QString::fromStdString(*raw);
-    return oneOf(v, kAutoPlaySources, 2) ? v : QStringLiteral("ALL_SOURCES");
+    return oneOf(v, kAutoPlaySources, 3) ? v : QStringLiteral("ALL_SOURCES");
 }
 
 void AppSettings::setStreamAutoPlaySource(const QString& v)
 {
-    if (!oneOf(v, kAutoPlaySources, 2) || streamAutoPlaySource() == v) return;
+    if (!oneOf(v, kAutoPlaySources, 3) || streamAutoPlaySource() == v) return;
     m_store->player.putString(profileScoped("stream_auto_play_source"),
                               v.toStdString());
     emit streamAutoPlayChanged();
@@ -489,6 +529,606 @@ void AppSettings::setSubtitleTextColor(const QString& v)
     emit subtitleStyleChanged();
 }
 
+// ---- P1a: full Linux-meaningful player-settings coverage -------------------
+// Every getter/setter below follows the established parity pattern: read the
+// profile-scoped Compose key, fall back to the Compose UiState/DEFAULT value
+// when absent, validate enum words on read AND write (unknown -> default, no
+// write). All emit playerOptionsChanged except the subtitle-family (shares
+// subtitleStyleChanged for live mpv apply) and the autoplay sets (share
+// streamAutoPlayChanged).
+
+namespace {
+// secondary languages: "" == unset (Compose null removes the key)
+[[nodiscard]] QString secondaryOrEmpty(PropertiesStore& store,
+                                      const std::string& scopedKey)
+{
+    const auto raw = store.getString(scopedKey);
+    if (!raw || raw->empty()) return QString();
+    return QString::fromStdString(*raw);
+}
+
+void setSecondary(PropertiesStore& store, const std::string& scopedKey,
+                  const QString& v)
+{
+    if (v.isEmpty()) store.remove(scopedKey);
+    else store.putString(scopedKey, v.toStdString());
+}
+
+[[nodiscard]] QStringList toQStringList(
+    const std::optional<std::vector<std::string>>& v)
+{
+    QStringList out;
+    if (!v) return out;
+    for (const auto& s : *v) out.append(QString::fromStdString(s));
+    return out;
+}
+
+[[nodiscard]] std::vector<std::string> sortedBytes(const QStringList& v)
+{
+    QStringList s = v;
+    s.removeDuplicates();
+    s.removeAll(QString());
+    std::sort(s.begin(), s.end());
+    std::vector<std::string> out;
+    for (const auto& q : s) out.push_back(q.toStdString());
+    return out;
+}
+} // namespace
+
+QString AppSettings::secondaryPreferredAudioLanguage() const
+{
+    return secondaryOrEmpty(m_store->player,
+                            profileScoped("secondary_preferred_audio_language"));
+}
+
+void AppSettings::setSecondaryPreferredAudioLanguage(const QString& v)
+{
+    if (secondaryPreferredAudioLanguage() == v) return;
+    setSecondary(m_store->player,
+                 profileScoped("secondary_preferred_audio_language"), v);
+    emit preferredAudioLanguageChanged();
+}
+
+QString AppSettings::secondaryPreferredSubtitleLanguage() const
+{
+    return secondaryOrEmpty(
+        m_store->player, profileScoped("secondary_preferred_subtitle_language"));
+}
+
+void AppSettings::setSecondaryPreferredSubtitleLanguage(const QString& v)
+{
+    if (secondaryPreferredSubtitleLanguage() == v) return;
+    setSecondary(m_store->player,
+                 profileScoped("secondary_preferred_subtitle_language"), v);
+    emit preferredSubtitleLanguageChanged();
+}
+
+QString AppSettings::subtitleBackgroundColor() const
+{
+    return QString::fromStdString(m_store->player.getString(
+        profileScoped("subtitle_background_color")).value_or("#00000000"));
+}
+
+void AppSettings::setSubtitleBackgroundColor(const QString& v)
+{
+    if (subtitleBackgroundColor() == v) return;
+    m_store->player.putString(profileScoped("subtitle_background_color"),
+                              v.toStdString());
+    emit subtitleStyleChanged();
+}
+
+QString AppSettings::subtitleOutlineColor() const
+{
+    return QString::fromStdString(m_store->player.getString(
+        profileScoped("subtitle_outline_color")).value_or("#FF000000"));
+}
+
+void AppSettings::setSubtitleOutlineColor(const QString& v)
+{
+    if (subtitleOutlineColor() == v) return;
+    m_store->player.putString(profileScoped("subtitle_outline_color"),
+                              v.toStdString());
+    emit subtitleStyleChanged();
+}
+
+bool AppSettings::subtitleStripSdh() const
+{
+    return m_store->player.getBoolean(
+        profileScoped("subtitle_strip_sdh")).value_or(false);
+}
+
+void AppSettings::setSubtitleStripSdh(bool v)
+{
+    if (subtitleStripSdh() == v) return;
+    m_store->player.putBoolean(profileScoped("subtitle_strip_sdh"), v);
+    emit subtitleStyleChanged();
+}
+
+bool AppSettings::subtitleShowOnlyPreferredLanguages() const
+{
+    return m_store->player.getBoolean(
+        profileScoped("subtitle_show_only_preferred_languages"))
+        .value_or(false);
+}
+
+void AppSettings::setSubtitleShowOnlyPreferredLanguages(bool v)
+{
+    if (subtitleShowOnlyPreferredLanguages() == v) return;
+    m_store->player.putBoolean(
+        profileScoped("subtitle_show_only_preferred_languages"), v);
+    emit subtitleStyleChanged();
+}
+
+QString AppSettings::addonSubtitleStartupMode() const
+{
+    return QString::fromStdString(m_store->player.getString(
+        profileScoped("addon_subtitle_startup_mode")).value_or("FAST_STARTUP"));
+}
+
+void AppSettings::setAddonSubtitleStartupMode(const QString& v)
+{
+    if (addonSubtitleStartupMode() == v) return;
+    m_store->player.putString(profileScoped("addon_subtitle_startup_mode"),
+                              v.toStdString());
+    emit subtitleStyleChanged();
+}
+
+QStringList AppSettings::streamAutoPlaySelectedAddons() const
+{
+    return toQStringList(m_store->player.getStringSet(
+        profileScoped("stream_auto_play_selected_addons")));
+}
+
+void AppSettings::setStreamAutoPlaySelectedAddons(const QStringList& v)
+{
+    if (streamAutoPlaySelectedAddons() == v) return;
+    m_store->player.putStringSet(
+        profileScoped("stream_auto_play_selected_addons"), sortedBytes(v));
+    emit streamAutoPlayChanged();
+}
+
+QStringList AppSettings::streamAutoPlaySelectedPlugins() const
+{
+    return toQStringList(m_store->player.getStringSet(
+        profileScoped("stream_auto_play_selected_plugins")));
+}
+
+void AppSettings::setStreamAutoPlaySelectedPlugins(const QStringList& v)
+{
+    if (streamAutoPlaySelectedPlugins() == v) return;
+    m_store->player.putStringSet(
+        profileScoped("stream_auto_play_selected_plugins"), sortedBytes(v));
+    emit streamAutoPlayChanged();
+}
+
+bool AppSettings::showLoadingOverlay() const
+{
+    return m_store->player.getBoolean(
+        profileScoped("show_loading_overlay")).value_or(true);
+}
+
+void AppSettings::setShowLoadingOverlay(bool v)
+{
+    if (showLoadingOverlay() == v) return;
+    m_store->player.putBoolean(profileScoped("show_loading_overlay"), v);
+    emit playerOptionsChanged();
+}
+
+bool AppSettings::showParentalGuide() const
+{
+    return m_store->player.getBoolean(
+        profileScoped("show_parental_guide")).value_or(true);
+}
+
+void AppSettings::setShowParentalGuide(bool v)
+{
+    if (showParentalGuide() == v) return;
+    m_store->player.putBoolean(profileScoped("show_parental_guide"), v);
+    emit playerOptionsChanged();
+}
+
+QString AppSettings::resizeMode() const
+{
+    static const char* const kModes[] = {"Fit", "Fill", "Zoom", "Stretch"};
+    const auto raw =
+        m_store->player.getString(profileScoped("resize_mode"));
+    if (!raw) return QStringLiteral("Fit");
+    const QString v = QString::fromStdString(*raw);
+    return oneOf(v, kModes, 4) ? v : QStringLiteral("Fit");
+}
+
+void AppSettings::setResizeMode(const QString& v)
+{
+    static const char* const kModes[] = {"Fit", "Fill", "Zoom", "Stretch"};
+    if (!oneOf(v, kModes, 4) || resizeMode() == v) return;
+    m_store->player.putString(profileScoped("resize_mode"), v.toStdString());
+    emit playerOptionsChanged();
+}
+
+bool AppSettings::holdToSpeedEnabled() const
+{
+    return m_store->player.getBoolean(
+        profileScoped("hold_to_speed_enabled")).value_or(true);
+}
+
+void AppSettings::setHoldToSpeedEnabled(bool v)
+{
+    if (holdToSpeedEnabled() == v) return;
+    m_store->player.putBoolean(profileScoped("hold_to_speed_enabled"), v);
+    emit playerOptionsChanged();
+}
+
+float AppSettings::holdToSpeedValue() const
+{
+    return m_store->player.getFloat(
+        profileScoped("hold_to_speed_value")).value_or(2.0f);
+}
+
+void AppSettings::setHoldToSpeedValue(float v)
+{
+    v = std::clamp(v, 0.5f, 4.0f);
+    if (holdToSpeedValue() == v) return;
+    m_store->player.putFloat(profileScoped("hold_to_speed_value"), v);
+    emit playerOptionsChanged();
+}
+
+bool AppSettings::touchGesturesEnabled() const
+{
+    return m_store->player.getBoolean(
+        profileScoped("touch_gestures_enabled")).value_or(true);
+}
+
+void AppSettings::setTouchGesturesEnabled(bool v)
+{
+    if (touchGesturesEnabled() == v) return;
+    m_store->player.putBoolean(profileScoped("touch_gestures_enabled"), v);
+    emit playerOptionsChanged();
+}
+
+bool AppSettings::mapDv7ToHevc() const
+{
+    return m_store->player.getBoolean(
+        profileScoped("map_dv7_to_hevc")).value_or(false);
+}
+
+void AppSettings::setMapDv7ToHevc(bool v)
+{
+    if (mapDv7ToHevc() == v) return;
+    m_store->player.putBoolean(profileScoped("map_dv7_to_hevc"), v);
+    emit playerOptionsChanged();
+}
+
+bool AppSettings::tunnelingEnabled() const
+{
+    return m_store->player.getBoolean(
+        profileScoped("tunneling_enabled")).value_or(false);
+}
+
+void AppSettings::setTunnelingEnabled(bool v)
+{
+    if (tunnelingEnabled() == v) return;
+    m_store->player.putBoolean(profileScoped("tunneling_enabled"), v);
+    emit playerOptionsChanged();
+}
+
+bool AppSettings::useLibass() const
+{
+    return m_store->player.getBoolean(
+        profileScoped("use_libass")).value_or(false);
+}
+
+void AppSettings::setUseLibass(bool v)
+{
+    if (useLibass() == v) return;
+    m_store->player.putBoolean(profileScoped("use_libass"), v);
+    emit playerOptionsChanged();
+}
+
+QString AppSettings::libassRenderType() const
+{
+    return QString::fromStdString(m_store->player.getString(
+        profileScoped("libass_render_type")).value_or("CUES"));
+}
+
+void AppSettings::setLibassRenderType(const QString& v)
+{
+    if (libassRenderType() == v) return;
+    m_store->player.putString(profileScoped("libass_render_type"),
+                              v.toStdString());
+    emit playerOptionsChanged();
+}
+
+bool AppSettings::nvidiaRtxSuperResolutionEnabled() const
+{
+    return m_store->player.getBoolean(
+        profileScoped("nvidia_rtx_super_resolution_enabled")).value_or(false);
+}
+
+void AppSettings::setNvidiaRtxSuperResolutionEnabled(bool v)
+{
+    if (nvidiaRtxSuperResolutionEnabled() == v) return;
+    m_store->player.putBoolean(
+        profileScoped("nvidia_rtx_super_resolution_enabled"), v);
+    emit playerOptionsChanged();
+}
+
+bool AppSettings::externalPlayerEnabled() const
+{
+    return m_store->player.getBoolean(
+        profileScoped("external_player_enabled")).value_or(false);
+}
+
+void AppSettings::setExternalPlayerEnabled(bool v)
+{
+    if (externalPlayerEnabled() == v) return;
+    m_store->player.putBoolean(profileScoped("external_player_enabled"), v);
+    emit playerOptionsChanged();
+}
+
+bool AppSettings::externalPlayerForwardSubtitles() const
+{
+    return m_store->player.getBoolean(
+        profileScoped("external_player_forward_subtitles")).value_or(false);
+}
+
+void AppSettings::setExternalPlayerForwardSubtitles(bool v)
+{
+    if (externalPlayerForwardSubtitles() == v) return;
+    m_store->player.putBoolean(
+        profileScoped("external_player_forward_subtitles"), v);
+    emit playerOptionsChanged();
+}
+
+bool AppSettings::externalPlayerSendSkipSegments() const
+{
+    return m_store->player.getBoolean(
+        profileScoped("external_player_send_skip_segments")).value_or(false);
+}
+
+void AppSettings::setExternalPlayerSendSkipSegments(bool v)
+{
+    if (externalPlayerSendSkipSegments() == v) return;
+    m_store->player.putBoolean(
+        profileScoped("external_player_send_skip_segments"), v);
+    emit playerOptionsChanged();
+}
+
+QString AppSettings::externalPlayerId() const
+{
+    return QString::fromStdString(m_store->player.getString(
+        profileScoped("external_player_id")).value_or("system"));
+}
+
+void AppSettings::setExternalPlayerId(const QString& v)
+{
+    if (externalPlayerId() == v) return;
+    if (v.isEmpty()) m_store->player.remove(profileScoped("external_player_id"));
+    else
+        m_store->player.putString(profileScoped("external_player_id"),
+                                  v.toStdString());
+    emit playerOptionsChanged();
+}
+
+bool AppSettings::streamReuseLastLinkEnabled() const
+{
+    return m_store->player.getBoolean(
+        profileScoped("stream_reuse_last_link_enabled")).value_or(false);
+}
+
+void AppSettings::setStreamReuseLastLinkEnabled(bool v)
+{
+    if (streamReuseLastLinkEnabled() == v) return;
+    m_store->player.putBoolean(
+        profileScoped("stream_reuse_last_link_enabled"), v);
+    emit playerOptionsChanged();
+}
+
+int AppSettings::streamReuseLastLinkCacheHours() const
+{
+    return m_store->player.getInt(
+        profileScoped("stream_reuse_last_link_cache_hours")).value_or(24);
+}
+
+void AppSettings::setStreamReuseLastLinkCacheHours(int v)
+{
+    v = std::max(v, 0);
+    if (streamReuseLastLinkCacheHours() == v) return;
+    m_store->player.putInt(
+        profileScoped("stream_reuse_last_link_cache_hours"), v);
+    emit playerOptionsChanged();
+}
+
+bool AppSettings::skipIntroEnabled() const
+{
+    return m_store->player.getBoolean(
+        profileScoped("skip_intro_enabled")).value_or(true);
+}
+
+void AppSettings::setSkipIntroEnabled(bool v)
+{
+    if (skipIntroEnabled() == v) return;
+    m_store->player.putBoolean(profileScoped("skip_intro_enabled"), v);
+    emit playerOptionsChanged();
+}
+
+QStringList AppSettings::autoSkipSegmentTypes() const
+{
+    return toQStringList(m_store->player.getStringSet(
+        profileScoped("auto_skip_segment_types")));
+}
+
+void AppSettings::setAutoSkipSegmentTypes(const QStringList& v)
+{
+    if (autoSkipSegmentTypes() == v) return;
+    m_store->player.putStringSet(profileScoped("auto_skip_segment_types"),
+                                 sortedBytes(v));
+    emit playerOptionsChanged();
+}
+
+bool AppSettings::animeSkipEnabled() const
+{
+    return m_store->player.getBoolean(
+        profileScoped("animeskip_enabled")).value_or(false);
+}
+
+void AppSettings::setAnimeSkipEnabled(bool v)
+{
+    if (animeSkipEnabled() == v) return;
+    m_store->player.putBoolean(profileScoped("animeskip_enabled"), v);
+    emit playerOptionsChanged();
+}
+
+QString AppSettings::animeSkipClientId() const
+{
+    return QString::fromStdString(m_store->player.getString(
+        profileScoped("animeskip_client_id")).value_or(""));
+}
+
+void AppSettings::setAnimeSkipClientId(const QString& v)
+{
+    if (animeSkipClientId() == v) return;
+    m_store->player.putString(profileScoped("animeskip_client_id"),
+                              v.toStdString());
+    emit playerOptionsChanged();
+}
+
+QString AppSettings::introDbApiKey() const
+{
+    return QString::fromStdString(m_store->player.getString(
+        profileScoped("introdb_api_key")).value_or(""));
+}
+
+void AppSettings::setIntroDbApiKey(const QString& v)
+{
+    if (introDbApiKey() == v) return;
+    m_store->player.putString(profileScoped("introdb_api_key"),
+                              v.toStdString());
+    emit playerOptionsChanged();
+}
+
+bool AppSettings::introSubmitEnabled() const
+{
+    return m_store->player.getBoolean(
+        profileScoped("intro_submit_enabled")).value_or(false);
+}
+
+void AppSettings::setIntroSubmitEnabled(bool v)
+{
+    if (introSubmitEnabled() == v) return;
+    m_store->player.putBoolean(profileScoped("intro_submit_enabled"), v);
+    emit playerOptionsChanged();
+}
+
+bool AppSettings::streamAutoPlayNextEpisodeEnabled() const
+{
+    return m_store->player.getBoolean(
+        profileScoped("stream_auto_play_next_episode_enabled"))
+        .value_or(false);
+}
+
+void AppSettings::setStreamAutoPlayNextEpisodeEnabled(bool v)
+{
+    if (streamAutoPlayNextEpisodeEnabled() == v) return;
+    m_store->player.putBoolean(
+        profileScoped("stream_auto_play_next_episode_enabled"), v);
+    emit playerOptionsChanged();
+}
+
+bool AppSettings::streamAutoPlayNextEpisodeFallbackEnabled() const
+{
+    return m_store->player.getBoolean(
+        profileScoped("stream_auto_play_next_episode_fallback_enabled"))
+        .value_or(true);
+}
+
+void AppSettings::setStreamAutoPlayNextEpisodeFallbackEnabled(bool v)
+{
+    if (streamAutoPlayNextEpisodeFallbackEnabled() == v) return;
+    m_store->player.putBoolean(
+        profileScoped("stream_auto_play_next_episode_fallback_enabled"), v);
+    emit playerOptionsChanged();
+}
+
+bool AppSettings::streamAutoPlayPreferBingeGroup() const
+{
+    return m_store->player.getBoolean(
+        profileScoped("stream_auto_play_prefer_binge_group")).value_or(true);
+}
+
+void AppSettings::setStreamAutoPlayPreferBingeGroup(bool v)
+{
+    if (streamAutoPlayPreferBingeGroup() == v) return;
+    m_store->player.putBoolean(
+        profileScoped("stream_auto_play_prefer_binge_group"), v);
+    emit playerOptionsChanged();
+}
+
+bool AppSettings::streamAutoPlayReuseBingeGroup() const
+{
+    return m_store->player.getBoolean(
+        profileScoped("stream_auto_play_reuse_binge_group")).value_or(true);
+}
+
+void AppSettings::setStreamAutoPlayReuseBingeGroup(bool v)
+{
+    if (streamAutoPlayReuseBingeGroup() == v) return;
+    m_store->player.putBoolean(
+        profileScoped("stream_auto_play_reuse_binge_group"), v);
+    emit playerOptionsChanged();
+}
+
+QString AppSettings::nextEpisodeThresholdMode() const
+{
+    static const char* const kModes[] = {"PERCENTAGE",
+                                         "MINUTES_BEFORE_END"};
+    const auto raw = m_store->player.getString(
+        profileScoped("next_episode_threshold_mode"));
+    if (!raw) return QStringLiteral("PERCENTAGE");
+    const QString v = QString::fromStdString(*raw);
+    return oneOf(v, kModes, 2) ? v : QStringLiteral("PERCENTAGE");
+}
+
+void AppSettings::setNextEpisodeThresholdMode(const QString& v)
+{
+    static const char* const kModes[] = {"PERCENTAGE",
+                                         "MINUTES_BEFORE_END"};
+    if (!oneOf(v, kModes, 2) || nextEpisodeThresholdMode() == v) return;
+    m_store->player.putString(profileScoped("next_episode_threshold_mode"),
+                              v.toStdString());
+    emit playerOptionsChanged();
+}
+
+float AppSettings::nextEpisodeThresholdPercent() const
+{
+    return m_store->player.getFloat(
+        profileScoped("next_episode_threshold_percent_v2")).value_or(99.0f);
+}
+
+void AppSettings::setNextEpisodeThresholdPercent(float v)
+{
+    v = std::clamp(v, 0.0f, 100.0f);
+    if (nextEpisodeThresholdPercent() == v) return;
+    m_store->player.putFloat(
+        profileScoped("next_episode_threshold_percent_v2"), v);
+    emit playerOptionsChanged();
+}
+
+float AppSettings::nextEpisodeThresholdMinutesBeforeEnd() const
+{
+    return m_store->player.getFloat(
+        profileScoped("next_episode_threshold_minutes_before_end_v2"))
+        .value_or(2.0f);
+}
+
+void AppSettings::setNextEpisodeThresholdMinutesBeforeEnd(float v)
+{
+    v = std::max(v, 0.0f);
+    if (nextEpisodeThresholdMinutesBeforeEnd() == v) return;
+    m_store->player.putFloat(
+        profileScoped("next_episode_threshold_minutes_before_end_v2"), v);
+    emit playerOptionsChanged();
+}
+
 // ---- remote-profile-sync surface --------------------------------------------
 
 QJsonObject AppSettings::exportPlayerSyncPayload()
@@ -502,23 +1142,149 @@ bool AppSettings::applyPlayerSyncPayload(const QJsonObject& payload)
     // apply through the SAME instance, then emit only for values that
     // actually flipped so unaffected QML bindings never churn.
     const QString preAudio  = preferredAudioLanguage();
+    const QString preSecAudio = secondaryPreferredAudioLanguage();
     const QString preSubs   = preferredSubtitleLanguage();
+    const QString preSecSubs = secondaryPreferredSubtitleLanguage();
     const bool    preForced = useForcedSubtitles();
     const QString preDecoder = decoderMode();
     const int     preCacheMb = cacheMb();
+    // Subtitle family (shares subtitleStyleChanged with the live applier).
+    const bool    preStripSdh = subtitleStripSdh();
+    const bool    preShowOnly = subtitleShowOnlyPreferredLanguages();
+    const QString preAddonStartup = addonSubtitleStartupMode();
+    const QString preSubBg = subtitleBackgroundColor();
+    const QString preSubOutline = subtitleOutlineColor();
+    const int     preSubSize = subtitleFontSize();
+    const QString preSubColor = subtitleTextColor();
+    const bool    preOutlineOn = subtitleOutlineEnabled();
+    const int     preOutlineW = subtitleOutlineWidth();
+    const bool    preSubBold = subtitleBold();
+    const int     preSubOffset = subtitleBottomOffset();
+    // Autoplay family (shares streamAutoPlayChanged).
+    const QString preApMode = streamAutoPlayMode();
+    const QString preApSource = streamAutoPlaySource();
+    const int     preApTimeout = streamAutoPlayTimeoutSeconds();
+    const QString preApRegex = streamAutoPlayRegex();
+    const QStringList preApAddons = streamAutoPlaySelectedAddons();
+    const QStringList preApPlugins = streamAutoPlaySelectedPlugins();
+    // Behavior family (shares playerOptionsChanged): one signature over the
+    // remaining getters is cheaper than 30 snapshots and equally exact for
+    // change detection (values are only read, never parsed, here).
+    const QString preBehavior =
+        QStringList{
+            showLoadingOverlay() ? QStringLiteral("1") : QStringLiteral("0"),
+            showParentalGuide() ? QStringLiteral("1") : QStringLiteral("0"),
+            resizeMode(),
+            holdToSpeedEnabled() ? QStringLiteral("1") : QStringLiteral("0"),
+            QString::number(holdToSpeedValue()),
+            touchGesturesEnabled() ? QStringLiteral("1") : QStringLiteral("0"),
+            mapDv7ToHevc() ? QStringLiteral("1") : QStringLiteral("0"),
+            tunnelingEnabled() ? QStringLiteral("1") : QStringLiteral("0"),
+            useLibass() ? QStringLiteral("1") : QStringLiteral("0"),
+            libassRenderType(),
+            nvidiaRtxSuperResolutionEnabled() ? QStringLiteral("1")
+                                              : QStringLiteral("0"),
+            externalPlayerEnabled() ? QStringLiteral("1") : QStringLiteral("0"),
+            externalPlayerForwardSubtitles() ? QStringLiteral("1")
+                                             : QStringLiteral("0"),
+            externalPlayerSendSkipSegments() ? QStringLiteral("1")
+                                             : QStringLiteral("0"),
+            externalPlayerId(),
+            streamReuseLastLinkEnabled() ? QStringLiteral("1")
+                                         : QStringLiteral("0"),
+            QString::number(streamReuseLastLinkCacheHours()),
+            skipIntroEnabled() ? QStringLiteral("1") : QStringLiteral("0"),
+            autoSkipSegmentTypes().join(QStringLiteral(";")),
+            animeSkipEnabled() ? QStringLiteral("1") : QStringLiteral("0"),
+            animeSkipClientId(), introDbApiKey(),
+            introSubmitEnabled() ? QStringLiteral("1") : QStringLiteral("0"),
+            streamAutoPlayNextEpisodeEnabled() ? QStringLiteral("1")
+                                               : QStringLiteral("0"),
+            streamAutoPlayNextEpisodeFallbackEnabled() ? QStringLiteral("1")
+                                                       : QStringLiteral("0"),
+            streamAutoPlayPreferBingeGroup() ? QStringLiteral("1")
+                                             : QStringLiteral("0"),
+            streamAutoPlayReuseBingeGroup() ? QStringLiteral("1")
+                                            : QStringLiteral("0"),
+            nextEpisodeThresholdMode(),
+            QString::number(nextEpisodeThresholdPercent()),
+            QString::number(nextEpisodeThresholdMinutesBeforeEnd()),
+        }.join(QStringLiteral("|"));
 
     const bool touched =
         PlayerSettingsSync::applyRemotePayload(m_store->player, payload);
     if (!touched) return false;
 
-    if (preferredAudioLanguage() != preAudio)
+    if (preferredAudioLanguage() != preAudio
+        || secondaryPreferredAudioLanguage() != preSecAudio)
         emit preferredAudioLanguageChanged();
-    if (preferredSubtitleLanguage() != preSubs)
+    if (preferredSubtitleLanguage() != preSubs
+        || secondaryPreferredSubtitleLanguage() != preSecSubs)
         emit preferredSubtitleLanguageChanged();
     if (useForcedSubtitles() != preForced)
         emit useForcedSubtitlesChanged();
     if (decoderMode() != preDecoder) emit decoderModeChanged();
     if (cacheMb() != preCacheMb) emit cacheMbChanged();
+    if (subtitleStripSdh() != preStripSdh
+        || subtitleShowOnlyPreferredLanguages() != preShowOnly
+        || addonSubtitleStartupMode() != preAddonStartup
+        || subtitleBackgroundColor() != preSubBg
+        || subtitleOutlineColor() != preSubOutline
+        || subtitleFontSize() != preSubSize
+        || subtitleTextColor() != preSubColor
+        || subtitleOutlineEnabled() != preOutlineOn
+        || subtitleOutlineWidth() != preOutlineW
+        || subtitleBold() != preSubBold
+        || subtitleBottomOffset() != preSubOffset)
+        emit subtitleStyleChanged();
+    if (streamAutoPlayMode() != preApMode
+        || streamAutoPlaySource() != preApSource
+        || streamAutoPlayTimeoutSeconds() != preApTimeout
+        || streamAutoPlayRegex() != preApRegex
+        || streamAutoPlaySelectedAddons() != preApAddons
+        || streamAutoPlaySelectedPlugins() != preApPlugins)
+        emit streamAutoPlayChanged();
+    const QString postBehavior =
+        QStringList{
+            showLoadingOverlay() ? QStringLiteral("1") : QStringLiteral("0"),
+            showParentalGuide() ? QStringLiteral("1") : QStringLiteral("0"),
+            resizeMode(),
+            holdToSpeedEnabled() ? QStringLiteral("1") : QStringLiteral("0"),
+            QString::number(holdToSpeedValue()),
+            touchGesturesEnabled() ? QStringLiteral("1") : QStringLiteral("0"),
+            mapDv7ToHevc() ? QStringLiteral("1") : QStringLiteral("0"),
+            tunnelingEnabled() ? QStringLiteral("1") : QStringLiteral("0"),
+            useLibass() ? QStringLiteral("1") : QStringLiteral("0"),
+            libassRenderType(),
+            nvidiaRtxSuperResolutionEnabled() ? QStringLiteral("1")
+                                              : QStringLiteral("0"),
+            externalPlayerEnabled() ? QStringLiteral("1") : QStringLiteral("0"),
+            externalPlayerForwardSubtitles() ? QStringLiteral("1")
+                                             : QStringLiteral("0"),
+            externalPlayerSendSkipSegments() ? QStringLiteral("1")
+                                             : QStringLiteral("0"),
+            externalPlayerId(),
+            streamReuseLastLinkEnabled() ? QStringLiteral("1")
+                                         : QStringLiteral("0"),
+            QString::number(streamReuseLastLinkCacheHours()),
+            skipIntroEnabled() ? QStringLiteral("1") : QStringLiteral("0"),
+            autoSkipSegmentTypes().join(QStringLiteral(";")),
+            animeSkipEnabled() ? QStringLiteral("1") : QStringLiteral("0"),
+            animeSkipClientId(), introDbApiKey(),
+            introSubmitEnabled() ? QStringLiteral("1") : QStringLiteral("0"),
+            streamAutoPlayNextEpisodeEnabled() ? QStringLiteral("1")
+                                               : QStringLiteral("0"),
+            streamAutoPlayNextEpisodeFallbackEnabled() ? QStringLiteral("1")
+                                                       : QStringLiteral("0"),
+            streamAutoPlayPreferBingeGroup() ? QStringLiteral("1")
+                                             : QStringLiteral("0"),
+            streamAutoPlayReuseBingeGroup() ? QStringLiteral("1")
+                                            : QStringLiteral("0"),
+            nextEpisodeThresholdMode(),
+            QString::number(nextEpisodeThresholdPercent()),
+            QString::number(nextEpisodeThresholdMinutesBeforeEnd()),
+        }.join(QStringLiteral("|"));
+    if (postBehavior != preBehavior) emit playerOptionsChanged();
     return true;
 }
 

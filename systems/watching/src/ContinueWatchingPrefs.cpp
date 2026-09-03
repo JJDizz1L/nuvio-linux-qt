@@ -151,12 +151,28 @@ ContinueWatchingPrefs ContinueWatchingPrefsStore::load() const
 
 void ContinueWatchingPrefsStore::save(const ContinueWatchingPrefs& prefs)
 {
+    saveRaw(ContinueWatchingPrefsCodec::encode(prefs));
+}
+
+QString ContinueWatchingPrefsStore::loadRaw() const
+{
+    nuvio::settings::PropertiesStore store(
+        nuvio::settings::PropertiesStore::defaultPath(
+            "continue_watching_preferences"));
+    const auto raw =
+        store.getString("continue_watching_preferences_" +
+                        std::to_string(m_profileId));
+    return raw ? QString::fromStdString(*raw) : QString();
+}
+
+void ContinueWatchingPrefsStore::saveRaw(const QString& json)
+{
     nuvio::settings::PropertiesStore store(
         nuvio::settings::PropertiesStore::defaultPath(
             "continue_watching_preferences"));
     store.putString("continue_watching_preferences_" +
                         std::to_string(m_profileId),
-                    ContinueWatchingPrefsCodec::encode(prefs).toStdString());
+                    json.toStdString());
 }
 
 } // namespace nuvio::watching

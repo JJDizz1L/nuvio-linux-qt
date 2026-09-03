@@ -274,6 +274,14 @@ void WatchRecorder::setCwVisible(const bool visible)
     emit cwPrefsChanged();
 }
 
+void WatchRecorder::reloadContinueWatchingPrefs()
+{
+    const ContinueWatchingPrefs fresh = m_cwPrefsStore.load();
+    if (fresh == m_cwPrefs) return;
+    m_cwPrefs = fresh;
+    emit cwPrefsChanged();
+}
+
 void WatchRecorder::setCwStyle(const QString& styleName)
 {
     CwStyle v = CwStyle::Card;

@@ -44,6 +44,10 @@ void PreferencesApplier::applySubtitles()
                             QString::number(m_settings->subtitleFontSize()));
     ctrl->setPropertyString(QStringLiteral("sub-color"),
                             m_settings->subtitleTextColor());
+    ctrl->setPropertyString(QStringLiteral("sub-back-color"),
+                            m_settings->subtitleBackgroundColor());
+    ctrl->setPropertyString(QStringLiteral("sub-outline-color"),
+                            m_settings->subtitleOutlineColor());
     // mpv 0.41 removed the numeric border-style values; the choice name is
     // the only accepted spelling. The disabled case is handled by forcing
     // sub-outline-size to 0 below (mpv's default style is the same choice).

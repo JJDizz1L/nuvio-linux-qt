@@ -56,6 +56,11 @@ public:
 
     [[nodiscard]] ContinueWatchingPrefs load() const;
     void save(const ContinueWatchingPrefs& prefs);
+    /// Raw payload access for remote-sync apply (blob P1b): the sync blob
+    /// carries the unparsed JSON string; it is stored verbatim so unknown
+    /// fields survive the round-trip (Compose ignoreUnknownKeys parity).
+    [[nodiscard]] QString loadRaw() const;
+    void saveRaw(const QString& json);
 
 private:
     int m_profileId;

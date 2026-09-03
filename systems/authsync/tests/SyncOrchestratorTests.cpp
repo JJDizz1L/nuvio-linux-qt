@@ -5,6 +5,7 @@
 #include <nuvio/authsync/SyncOrchestrator.h>
 
 #include <nuvio/settings/AppSettings.h>
+#include <nuvio/watching/ContinueWatchingPrefs.h>
 
 #include <QCoreApplication>
 #include <QDir>
@@ -235,6 +236,119 @@ int main(int argc, char** argv)
         settings.setPreferredAudioLanguage(QStringLiteral("en"));  // no-op setter
         pump(120);
         CHECK(pushes == 2, "no push for unchanged player state");
+    }
+
+    { // T6: full-blob pull applies player + CW, caches unowned features;
+      // the next push re-sends them verbatim (no sibling-state wipe).
+      // NOTE: the reply is assembled with QJsonDocument throughout - hand-
+      // escaped raw literals once produced a stray byte that Qt's strict
+      // parser (unlike python's) rejects, failing the pull with an empty
+      // doc while the HTTP status stayed 200.
+        QJsonObject playerFragment{
+            {QStringLiteral("resize_mode_1"),
+             QJsonObject{{QLatin1String("type"), QLatin1String("string")},
+                         {QLatin1String("value"),
+                          QStringLiteral("Fill")}}},
+        };
+        QJsonObject fullFeatures{
+            {QStringLiteral("player_settings"), playerFragment},
+            {QStringLiteral("theme_settings"),
+             QJsonObject{
+                 {QStringLiteral("mytheme"),
+                  QJsonObject{{QLatin1String("type"),
+                               QLatin1String("string")},
+                              {QLatin1String("value"),
+                               QStringLiteral("CRIMSON")}}}}},
+            {QStringLiteral("stream_badge_settings"),
+             QJsonObject{
+                 {QStringLiteral("show_badges"),
+                  QJsonObject{{QLatin1String("type"),
+                               QLatin1String("boolean")},
+                              {QLatin1String("value"), true}}}}},
+            {QStringLiteral("continue_watching_settings_payload"),
+             QStringLiteral("{\"isVisible\":false}")},
+        };
+        rpc.setBlobReply(QJsonDocument(QJsonObject{
+                             {QStringLiteral("version"), 3},
+                             {QStringLiteral("features"), fullFeatures}})
+                             .toJson(QJsonDocument::Compact));
+        orch.pullNow();
+        pump(200);
+        CHECK(pullApplied == 2, "full-blob pull reported applied");
+        CHECK(settings.resizeMode() == "Fill", "player fragment applied");
+        nuvio::watching::ContinueWatchingPrefsStore cwCheck(1);
+        CHECK(cwCheck.loadRaw() == "{\"isVisible\":false}",
+              "CW payload applied verbatim into the shared store");
+
+        settings.setHoldToSpeedEnabled(false);
+        pump(200);
+        CHECK(pushes == 3, "post-pull edit pushes once more");
+        const auto features =
+            QJsonDocument::fromJson(rpc.bodies.last()).object()
+                .value(QStringLiteral("p_settings_json")).toObject()
+                .value(QStringLiteral("features")).toObject();
+        CHECK(features.value(QStringLiteral("theme_settings")).toObject()
+                          .value(QStringLiteral("mytheme")).toObject()
+                          .value(QStringLiteral("value")).toString()
+                      == "CRIMSON",
+              "unowned theme feature re-sent verbatim");
+        CHECK(features.value(QStringLiteral("stream_badge_settings"))
+                          .toObject()
+                          .value(QStringLiteral("show_badges")).toObject()
+                          .value(QStringLiteral("value")).toBool()
+                      == true,
+              "unowned badges feature re-sent verbatim");
+        CHECK(features.value(QStringLiteral(
+                          "continue_watching_settings_payload"))
+                      .toString()
+                  == "{\"isVisible\":false}",
+              "CW payload re-sent from the shared store");
+        CHECK(features.value(QStringLiteral("player_settings")).toObject()
+                          .value(QStringLiteral("hold_to_speed_enabled_1"))
+                          .toObject()
+                          .value(QStringLiteral("value")).toBool()
+                      == false,
+              "fresh player fragment rides the same push");
+    }
+
+    { // T7: push-before-pull gate - a cold orchestrator never pushes until
+      // its first pull attempt completes (empty passthrough cache would
+      // otherwise drop server-side sibling features). The pull-primed
+      // orchestrator above shares the settings object, so count deltas:
+      // exactly one push (his) must fire, never two.
+      //
+      // NOTE: the post-gate proof uses an ISOLATED settings/orchestrator
+      // pair - two orchestrators pushing the same 200 ms window once lost a
+      // reply inside this single-threaded TCP fake (9 requests sent, 8
+      // completions). That is a fake concurrency limit, not product
+      // behavior (production runs one orchestrator); the test avoids it.
+        SyncOrchestrator gated(&settings, cfg,
+                               [] { return QByteArray("jwt"); });
+        gated.setDebounceMs(10);
+        gated.beginObserving();
+        const int pushesBefore = pushes;
+        settings.setShowParentalGuide(false);
+        pump(150);
+        CHECK(pushes == pushesBefore + 1,
+              "only the pull-primed orchestrator pushed (cold one gated)");
+        gated.pullNow();   // same full blob: nothing differs anymore
+        pump(200);
+
+        AppSettings g2settings;
+        SyncOrchestrator gated2(&g2settings, cfg,
+                                [] { return QByteArray("jwt"); });
+        gated2.setDebounceMs(10);
+        int pushes2 = 0;
+        QObject::connect(&gated2, &SyncOrchestrator::pushFinished,
+                         [&](bool) { ++pushes2; });
+        gated2.beginObserving();
+        gated2.pullNow();   // opens the gate (no diffs to apply)
+        pump(200);
+        g2settings.setShowLoadingOverlay(false);
+        pump(200);
+        CHECK(pushes2 == 1, "push fires exactly once after the gate opens");
+        CHECK(pushes == pushesBefore + 1,
+              "other orchestrators unaffected by the isolated pair");
     }
 
     { // T5: signed-out orchestrator is a full no-op

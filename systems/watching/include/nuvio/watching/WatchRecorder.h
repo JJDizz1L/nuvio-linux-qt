@@ -94,6 +94,9 @@ public:
     Q_INVOKABLE void setCwUnairedNextUp(bool on);
     Q_INVOKABLE void setCwResumePrompt(bool on);
     Q_INVOKABLE void setCwUpNextFurthest(bool on);
+    /// Re-reads the CW prefs store (remote-sync apply path) and emits
+    /// cwPrefsChanged when anything flipped.
+    void reloadContinueWatchingPrefs();
 
 signals:
     void continueWatchingChanged();

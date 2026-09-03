@@ -4,12 +4,14 @@
 
 #include <QCoreApplication>
 #include <QDir>
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QTemporaryDir>
 
 #include <nuvio/settings/PropertiesStore.h>
 
 #include <cstdio>
+#include <vector>
 
 using nuvio::settings::PlayerSettingsSync;
 using Store = nuvio::settings::PropertiesStore;
@@ -105,8 +107,69 @@ int main(int argc, char** argv)
               "absent remote key left local value");
     }
 
+    { // P1a: float + string-set envelopes, credential never exported.
+        Store seed(path);
+        seed.putFloat("hold_to_speed_value_1", 2.5f);
+        seed.putFloat("next_episode_threshold_percent_v2_1", 80.5f);
+        seed.putStringSet("auto_skip_segment_types_1", {"recap", "intro"});
+        seed.putString("introdb_api_key_1", "secret");
+        seed.putString("stream_auto_play_selected_addons_1", "[\"b\",\"a\"]");
+        seed.persist();
+
+        Store view(path);
+        const auto out = PlayerSettingsSync::exportSyncPayload(view);
+        const QString json =
+            QString::fromUtf8(QJsonDocument(out).toJson(QJsonDocument::Compact));
+        CHECK(json.contains(
+                  R"("hold_to_speed_value_1":{"type":"float")"),
+              "float envelope present");
+        CHECK(json.contains(
+                  R"("auto_skip_segment_types_1":{"type":"string_set","value":["intro","recap"]})"),
+              "string-set envelope sorted");
+        CHECK(!json.contains("introdb_api_key_1"),
+              "credential key never exported");
+        CHECK(!json.contains("android_playback_engine_1"),
+              "mobile-only keys absent without storage");
+    }
+
+    { // P1a apply: float/set/credential legs + invalid float ignored.
+        QJsonObject remote;
+        remote.insert(QStringLiteral("hold_to_speed_value_1"),
+                      QJsonObject{{QLatin1String("type"),
+                                   QLatin1String("float")},
+                                  {QLatin1String("value"), 1.5}});
+        remote.insert(QStringLiteral("auto_skip_segment_types_1"),
+                      QJsonObject{
+                          {QLatin1String("type"),
+                           QLatin1String("string_set")},
+                          {QLatin1String("value"),
+                           QJsonArray{QStringLiteral("outro")}}});
+        remote.insert(QStringLiteral("introdb_api_key_1"),
+                      SyncEnvelopeString(QStringLiteral("k")));
+        remote.insert(QStringLiteral("next_episode_threshold_percent_v2_1"),
+                      QJsonObject{{QLatin1String("type"),
+                                   QLatin1String("string")},
+                                  {QLatin1String("value"),
+                                   QStringLiteral("not-a-float")}});
+
+        Store target(path);
+        CHECK(PlayerSettingsSync::applyRemotePayload(target, remote),
+              "new-type payload touches");
+
+        Store after(path);
+        CHECK(after.getFloat("hold_to_speed_value_1").value_or(-1.0f)
+                  == 1.5f,
+              "float applied");
+        const auto types =
+            after.getStringSet("auto_skip_segment_types_1").value_or(
+                std::vector<std::string>{});
+        CHECK(types.size() == 1 && types.front() == "outro", "set applied");
+        CHECK(after.getString("introdb_api_key_1").value_or("") == "k",
+              "credential accepted on apply (Compose replace parity)");
+    }
+
     std::printf(failures ? "SYNC-PLAYER SUITE FAILURES=%d\n"
                          : "SYNC-PLAYER SUITE OK (%d failures)\n",
-                failures);
+                 failures);
     return failures ? 1 : 0;
 }

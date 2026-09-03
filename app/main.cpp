@@ -392,6 +392,9 @@ int main(int argc, char* argv[])
             nuvio::watching::kDefaultProfileId);
     auto watchRecorder = std::make_unique<nuvio::watching::WatchRecorder>(
         watchingStore.get());
+    // P1b: the settings-blob CW payload applies into the recorder's store;
+    // the orchestrator reloads it (emits cwPrefsChanged) on remote merges.
+    syncOrch->setWatchRecorder(watchRecorder.get());
     engine.rootContext()->setContextProperty(
         QStringLiteral("watching"), QVariant::fromValue<QObject*>(
                                         watchRecorder.get()));
@@ -414,6 +417,12 @@ int main(int argc, char* argv[])
                      progressSync.get(),
                      &nuvio::authsync::ProgressSyncController::
                          onWatchedChanged);
+    // CW prefs ride the settings blob (P1b): local edits schedule a blob
+    // push; remote merges reload through setWatchRecorder above.
+    QObject::connect(watchRecorder.get(),
+                     &nuvio::watching::WatchRecorder::cwPrefsChanged,
+                     syncOrch.get(),
+                     &nuvio::authsync::SyncOrchestrator::schedulePush);
     // Addons rows sync: registry changes -> debounced full-state push;
     // session activation -> server pull applied into the registry.
     auto addonsSync =

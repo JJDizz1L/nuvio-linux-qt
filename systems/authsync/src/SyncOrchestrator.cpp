@@ -9,9 +9,12 @@
 #include <optional>
 
 #include "nuvio/settings/AppSettings.h"
+#include "nuvio/settings/SyncBlobFeatures.h"
 #include "nuvio/settings/SyncIdentity.h"
 #include "nuvio/settings/SyncPlayerSettings.h"
 #include "nuvio/settings/PropertiesStore.h"
+#include "nuvio/watching/ContinueWatchingPrefs.h"
+#include "nuvio/watching/WatchRecorder.h"
 
 namespace nuvio::authsync {
 
@@ -46,6 +49,7 @@ SyncOrchestrator::~SyncOrchestrator() = default;
 void SyncOrchestrator::pullNow()
 {
     if (!m_cfg.valid() || !signedIn() || m_inFlight != 0) {
+        m_pullAttempted = true;   // attempt concluded; pushes may proceed
         emit pullFinished(false);
         return;
     }
@@ -58,6 +62,7 @@ void SyncOrchestrator::pullNow()
                                const QJsonDocument& doc, QByteArray) {
             disconnect(*con);
             --m_inFlight;
+            m_pullAttempted = true;
             if (!ok || status != 200) {
                 emit pullFinished(false);
                 return;
@@ -73,27 +78,59 @@ void SyncOrchestrator::pullNow()
             }
             const QJsonObject blob =
                 row.value(QStringLiteral("settings_json")).toObject();
-            const QJsonObject player =
-                blob.value(QStringLiteral("features"))
-                    .toObject()
-                    .value(QStringLiteral("player_settings"))
-                    .toObject();
+            const QJsonObject features =
+                blob.value(QStringLiteral("features")).toObject();
+            const QJsonObject player = features
+                                           .value(QLatin1String(
+                                               settings::BlobFeature::kPlayer))
+                                           .toObject();
 
-            if (player.isEmpty()) {
-                emit pullFinished(false);   // no remote player fragment yet
+            // Passthrough first: cache every received unowned feature so
+            // the NEXT push preserves sibling-client state (SyncBlobFeatures
+            // rule). Merge-only - a partial pull never evicts.
+            m_passthrough.mergeFromPull(features);
+
+            bool applied = false;
+
+            // CW payload string applies verbatim into the Compose-shared CW
+            // store (unknown fields survive: our decode is tolerant and we
+            // never re-encode on this path); the recorder reloads + notifies.
+            const QJsonValue cwValue = features.value(QLatin1String(
+                settings::BlobFeature::kContinueWatching));
+            if (cwValue.isString()) {
+                nuvio::watching::ContinueWatchingPrefsStore cwStore(profileId);
+                if (cwStore.loadRaw() != cwValue.toString()) {
+                    cwStore.saveRaw(cwValue.toString());
+                    if (m_recorder) m_recorder->reloadContinueWatchingPrefs();
+                    applied = true;
+                }
+            }
+
+            if (player.isEmpty() && !applied) {
+                emit pullFinished(false);   // nothing we own yet
                 return;
             }
 
-            const QByteArray remoteSig = sigOf(player);
-            if (remoteSig == currentExportSig()) {
+            if (!player.isEmpty()) {
+                const QByteArray remoteSig = sigOf(player);
+                if (remoteSig != sigOf(m_settings->exportPlayerSyncPayload())) {
+                    m_applyRemote = true;   // suppress our own echo push
+                    m_settings->applyPlayerSyncPayload(player);
+                    m_applyRemote   = false;
+                    applied         = true;
+                }
+            }
+
+            if (!applied) {
                 emit pullFinished(false);   // already identical
                 return;
             }
 
-            m_applyRemote = true;           // suppress our own echo push
-            m_settings->applyPlayerSyncPayload(player);
+            // Arm echo suppression against the FULL push-shape blob (fresh
+            // player export + just-merged passthrough), not the player
+            // fragment alone.
             m_applyRemote   = false;
-            m_skipNextSig   = sigOf(m_settings->exportPlayerSyncPayload());
+            m_skipNextSig   = sigOf(fullPushBlob());
             emit pullFinished(true);
         });
     m_client->call(QString::fromLatin1(SyncFn::kPullProfileBlob),
@@ -119,6 +156,12 @@ void SyncOrchestrator::beginObserving()
     connect(m_settings,
             &nuvio::settings::AppSettings::useForcedSubtitlesChanged,
             this, &SyncOrchestrator::schedulePush);
+    connect(m_settings, &nuvio::settings::AppSettings::subtitleStyleChanged,
+            this, &SyncOrchestrator::schedulePush);
+    connect(m_settings, &nuvio::settings::AppSettings::streamAutoPlayChanged,
+            this, &SyncOrchestrator::schedulePush);
+    connect(m_settings, &nuvio::settings::AppSettings::playerOptionsChanged,
+            this, &SyncOrchestrator::schedulePush);
     connect(m_settings, &nuvio::settings::AppSettings::darkThemeChanged,
             this, &SyncOrchestrator::schedulePush);   // dedup eats it
     connect(m_settings, &nuvio::settings::AppSettings::discordEnabledChanged,
@@ -130,7 +173,23 @@ void SyncOrchestrator::beginObserving()
 
 QByteArray SyncOrchestrator::currentExportSig()
 {
-    return sigOf(m_settings->exportPlayerSyncPayload());
+    return sigOf(fullPushBlob());
+}
+
+QJsonObject SyncOrchestrator::fullPushBlob()
+{
+    QJsonObject passthrough = m_passthrough.loadAll();
+    // CW prefs ride the blob as the raw payload string (Compose parity):
+    // re-sent verbatim from the shared store so local recorder edits
+    // propagate; omitted while never set (never fabricate "").
+    nuvio::watching::ContinueWatchingPrefsStore cwStore(m_profileId);
+    const QString cwRaw = cwStore.loadRaw();
+    if (!cwRaw.isEmpty())
+        passthrough.insert(
+            QLatin1String(settings::BlobFeature::kContinueWatching),
+            cwRaw);
+    return settings::buildPushBlob(m_settings->exportPlayerSyncPayload(),
+                                   passthrough);
 }
 
 QJsonObject SyncOrchestrator::baseParams()
@@ -147,17 +206,21 @@ QJsonObject SyncOrchestrator::baseParams()
 
 void SyncOrchestrator::schedulePush()
 {
-    if (m_inFlight != 0 || m_applyRemote) return;
+    if (m_inFlight != 0 || m_applyRemote || !m_pullAttempted) return;
     if (!m_debounce.isActive()) m_debounce.start();
 }
 
 void SyncOrchestrator::doPush()
 {
-    if (!m_cfg.valid() || !signedIn() || m_inFlight != 0 || m_applyRemote)
+    // First-push-before-pull gate: without a pull attempt the passthrough
+    // cache is cold and a push could drop server-side sibling features
+    // (SyncBlobFeatures rule). The startup pullNow() always runs first.
+    if (!m_cfg.valid() || !signedIn() || m_inFlight != 0 || m_applyRemote
+        || !m_pullAttempted)
         return;
 
-    const QJsonObject payload = m_settings->exportPlayerSyncPayload();
-    const QByteArray payloadSig = sigOf(payload);
+    const QJsonObject blob = fullPushBlob();
+    const QByteArray payloadSig = sigOf(blob);
 
     // Echo suppression #1: nothing visibly changed since the last merge.
     if (m_skipNextSig && payloadSig == *m_skipNextSig) {
@@ -166,11 +229,6 @@ void SyncOrchestrator::doPush()
     }
     // Echo suppression #2: identical to what the server already holds.
     if (m_lastPushSig && payloadSig == *m_lastPushSig) return;
-
-    const QJsonObject blob{
-        {QStringLiteral("version"), 3},
-        {QStringLiteral("features"),
-         QJsonObject{{QStringLiteral("player_settings"), payload}}}};
 
     QJsonObject params = baseParams();
     params.insert(QStringLiteral("p_settings_json"), blob);

@@ -42,7 +42,9 @@ int main(int argc, char** argv)
         CHECK(s.cacheMb() == 256, "cache 256 default");
         CHECK(s.preferredAudioLanguage() == "device", "audio lang device default");
         CHECK(s.preferredSubtitleLanguage() == "none", "sub lang none default");
-        CHECK(s.useForcedSubtitles() == true, "forced subs default true");
+        // P1a parity fix: Compose SubtitleStyleState.DEFAULT.useForcedSubtitles
+        // is FALSE (both live shared files store an explicit true instead).
+        CHECK(s.useForcedSubtitles() == false, "forced subs default false");
         CHECK(s.discordEnabled() == false, "discord default off");
         CHECK(s.torrentCacheSize() == "GB_2", "torrent cache GB_2 default");
     }
@@ -147,6 +149,131 @@ int main(int argc, char** argv)
               "post-migration read from parity store");
         CHECK(s2.cacheMb() == 512, "post-migration cache enum round-trip");
     }
+    { // P1a: Compose UiState/DEFAULT values for every new key.
+        AppSettings s;
+        CHECK(s.showLoadingOverlay() == true, "overlay default");
+        CHECK(s.showParentalGuide() == true, "parental default");
+        CHECK(s.resizeMode() == "Fit", "resize Fit default");
+        CHECK(s.holdToSpeedEnabled() == true, "hold-speed default");
+        CHECK(s.holdToSpeedValue() == 2.0f, "hold-speed 2x default");
+        CHECK(s.touchGesturesEnabled() == true, "gestures default");
+        CHECK(s.mapDv7ToHevc() == false, "dv7 default");
+        CHECK(s.tunnelingEnabled() == false, "tunneling default");
+        CHECK(s.useLibass() == false, "libass default");
+        CHECK(s.libassRenderType() == "CUES", "libass render default");
+        CHECK(s.nvidiaRtxSuperResolutionEnabled() == false, "rtx default");
+        CHECK(s.externalPlayerEnabled() == false, "ext player default");
+        CHECK(s.externalPlayerForwardSubtitles() == false, "ext fwd default");
+        CHECK(s.externalPlayerSendSkipSegments() == false, "ext skip default");
+        CHECK(s.externalPlayerId() == "system", "ext id system default");
+        CHECK(s.secondaryPreferredAudioLanguage() == "", "sec audio unset");
+        CHECK(s.secondaryPreferredSubtitleLanguage() == "", "sec sub unset");
+        CHECK(s.subtitleBackgroundColor() == "#00000000", "sub bg default");
+        CHECK(s.subtitleOutlineColor() == "#FF000000", "sub outline default");
+        CHECK(s.subtitleStripSdh() == false, "sdh default");
+        CHECK(s.subtitleShowOnlyPreferredLanguages() == false,
+              "show-only default");
+        CHECK(s.addonSubtitleStartupMode() == "FAST_STARTUP",
+              "startup mode default");
+        CHECK(s.streamReuseLastLinkEnabled() == false, "reuse default");
+        CHECK(s.streamReuseLastLinkCacheHours() == 24, "reuse hours default");
+        CHECK(s.streamAutoPlaySource() == "ALL_SOURCES", "ap source default");
+        CHECK(s.streamAutoPlaySelectedAddons().isEmpty(), "ap addons empty");
+        CHECK(s.streamAutoPlaySelectedPlugins().isEmpty(), "ap plugins empty");
+        CHECK(s.skipIntroEnabled() == true, "skip intro default");
+        CHECK(s.autoSkipSegmentTypes().isEmpty(), "skip types empty");
+        CHECK(s.animeSkipEnabled() == false, "animeskip default");
+        CHECK(s.animeSkipClientId() == "", "animeskip id default");
+        CHECK(s.introDbApiKey() == "", "introdb default");
+        CHECK(s.introSubmitEnabled() == false, "intro submit default");
+        CHECK(s.streamAutoPlayNextEpisodeEnabled() == false,
+              "next-ep default");
+        CHECK(s.streamAutoPlayNextEpisodeFallbackEnabled() == true,
+              "next-ep fallback default");
+        CHECK(s.streamAutoPlayPreferBingeGroup() == true, "binge default");
+        CHECK(s.streamAutoPlayReuseBingeGroup() == true, "reuse binge default");
+        CHECK(s.nextEpisodeThresholdMode() == "PERCENTAGE",
+              "threshold mode default");
+        CHECK(s.nextEpisodeThresholdPercent() == 99.0f, "threshold pct default");
+        CHECK(s.nextEpisodeThresholdMinutesBeforeEnd() == 2.0f,
+              "threshold min default");
+    }
+    { // P1a: round-trips, enum validation, set sorting, parity-key spellings.
+        AppSettings s;
+        int optsFired = 0, styleFired = 0, apFired = 0;
+        QObject::connect(&s, &AppSettings::playerOptionsChanged,
+                         [&] { ++optsFired; });
+        QObject::connect(&s, &AppSettings::subtitleStyleChanged,
+                         [&] { ++styleFired; });
+        QObject::connect(&s, &AppSettings::streamAutoPlayChanged,
+                         [&] { ++apFired; });
+
+        s.setResizeMode("Fill");
+        s.setResizeMode("Sideways");   // invalid: rejected, no signal
+        s.setStreamAutoPlaySource("ENABLED_PLUGINS_ONLY");
+        s.setNextEpisodeThresholdMode("MINUTES_BEFORE_END");
+        s.setNextEpisodeThresholdMode("BOGUS");  // rejected
+        s.setAutoSkipSegmentTypes(QStringList{"recap", "intro"}); // sorted
+        s.setSecondaryPreferredAudioLanguage("en");
+        s.setSecondaryPreferredAudioLanguage("");  // unsets (Compose null)
+        s.setHoldToSpeedValue(9.0f);   // clamp high -> 4.0
+        s.setStreamAutoPlayTimeoutSeconds(-4);  // Compose: negatives -> 0
+        s.setSubtitleBackgroundColor("#80000000");
+        s.setSubtitleShowOnlyPreferredLanguages(true);
+
+        CHECK(s.resizeMode() == "Fill", "resize round-trip");
+        CHECK(s.streamAutoPlaySource() == "ENABLED_PLUGINS_ONLY",
+              "new source value round-trips");
+        CHECK(s.nextEpisodeThresholdMode() == "MINUTES_BEFORE_END",
+              "threshold mode round-trip");
+        CHECK((s.autoSkipSegmentTypes() == QStringList{"intro", "recap"}),
+              "segment types sorted on write");
+        CHECK(s.secondaryPreferredAudioLanguage() == "",
+              "secondary empty after unset");
+        CHECK(s.holdToSpeedValue() == 4.0f, "hold-speed clamp");
+        CHECK(s.streamAutoPlayTimeoutSeconds() == 0, "negative timeout -> 0");
+        CHECK(optsFired == 4, "one options signal per real change");
+        CHECK(styleFired == 2, "subtitle signals for bg + show-only");
+        CHECK(apFired == 2, "autoplay signals for source + timeout");
+
+        PropertiesStore player{PropertiesStore::defaultPath("player_settings")};
+        CHECK(player.getString("resize_mode_1").value_or("") == "Fill",
+              "resize parity key");
+        CHECK(player.getString("stream_auto_play_source_1").value_or("")
+                  == "ENABLED_PLUGINS_ONLY",
+              "source parity key");
+        CHECK(player.getString("auto_skip_segment_types_1").value_or("")
+                  == "[\"intro\",\"recap\"]",
+              "string-set parity shape (sorted kotlinx array)");
+        CHECK(!player.getString("secondary_preferred_audio_language_1")
+                   .has_value(),
+              "secondary unset removes the key");
+        CHECK(player.getString("subtitle_background_color_1").value_or("")
+                  == "#80000000",
+              "sub bg parity key");
+        CHECK(player.getInt("stream_auto_play_timeout_seconds_1")
+                      .value_or(-1) == 0,
+              "timeout parity key");
+
+        // Compose-shaped cross-read: a fork-written row decodes exactly.
+        {
+            PropertiesStore seed{
+                PropertiesStore::defaultPath("player_settings")};
+            seed.putString("next_episode_threshold_mode_1",
+                           "MINUTES_BEFORE_END");
+            seed.putFloat("next_episode_threshold_percent_v2_1", 80.5f);
+            seed.putBoolean("stream_auto_play_prefer_binge_group_1", false);
+            seed.putString("external_player_id_1", "mpv");
+        }
+        AppSettings s2;
+        CHECK(s2.nextEpisodeThresholdMode() == "MINUTES_BEFORE_END",
+              "cross-read threshold mode");
+        CHECK(s2.nextEpisodeThresholdPercent() == 80.5f,
+              "cross-read threshold pct");
+        CHECK(s2.streamAutoPlayPreferBingeGroup() == false,
+              "cross-read binge flag");
+        CHECK(s2.externalPlayerId() == "mpv", "cross-read ext id");
+    }
     { // QML-facing property registration: methods WITHOUT Q_PROPERTY are
       // invisible to QML (reads yield undefined -> dead bindings). Pin the
       // subtitle-appearance registrations (the 2026-08-27 bug class).
@@ -163,6 +290,18 @@ int main(int argc, char** argv)
               "subtitleBold registered");
         CHECK(mo->indexOfProperty("subtitleBottomOffset") >= 0,
               "subtitleBottomOffset registered");
+        CHECK(mo->indexOfProperty("subtitleBackgroundColor") >= 0,
+              "subtitleBackgroundColor registered");
+        CHECK(mo->indexOfProperty("subtitleOutlineColor") >= 0,
+              "subtitleOutlineColor registered");
+        CHECK(mo->indexOfProperty("resizeMode") >= 0,
+              "resizeMode registered");
+        CHECK(mo->indexOfProperty("streamAutoPlaySource") >= 0,
+              "streamAutoPlaySource registered");
+        CHECK(mo->indexOfProperty("skipIntroEnabled") >= 0,
+              "skipIntroEnabled registered");
+        CHECK(mo->indexOfProperty("nextEpisodeThresholdMode") >= 0,
+              "nextEpisodeThresholdMode registered");
     }
 
     std::printf(failures ? "SETTINGS-APP SUITE FAILURES=%d\n"

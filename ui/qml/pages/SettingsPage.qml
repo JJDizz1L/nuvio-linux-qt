@@ -289,10 +289,13 @@ Item {
                     model: [
                         { label: qsTr("All sources"), value: "ALL_SOURCES" },
                         { label: qsTr("Addons only"),
-                          value: "INSTALLED_ADDONS_ONLY" }
+                          value: "INSTALLED_ADDONS_ONLY" },
+                        { label: qsTr("Plugins only"),
+                          value: "ENABLED_PLUGINS_ONLY" }
                     ]
                     currentIndex:
-                        ["ALL_SOURCES", "INSTALLED_ADDONS_ONLY"]
+                        ["ALL_SOURCES", "INSTALLED_ADDONS_ONLY",
+                         "ENABLED_PLUGINS_ONLY"]
                             .indexOf(appsettings.streamAutoPlaySource)
                     onActivated: function(i) {
                         appsettings.streamAutoPlaySource = model[i].value
