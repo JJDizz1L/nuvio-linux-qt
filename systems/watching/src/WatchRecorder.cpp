@@ -2,13 +2,14 @@
 
 #include <QDateTime>
 
+#include "nuvio/settings/ActiveProfile.h"
 #include "nuvio/watching/WatchingStore.h"
 
 namespace nuvio::watching {
 
 WatchRecorder::WatchRecorder(WatchingStore* store, QObject* parent)
     : QObject(parent), m_store(store),
-      m_cwPrefsStore{kDefaultProfileId}
+      m_cwPrefsStore{nuvio::settings::ActiveProfile::id()}
 {
     m_cwPrefs = m_cwPrefsStore.load();
 }
@@ -126,6 +127,18 @@ void WatchRecorder::endSessionAbandoned()
 void WatchRecorder::refresh()
 {
     rebuildModel();
+}
+
+void WatchRecorder::setProfileId(int profileId)
+{
+    // Active sessions belong to the old profile: abandon without writing
+    // (its position was already persisted incrementally by the pump).
+    m_session = WatchEntry{};
+    m_store->setProfileId(profileId);
+    m_cwPrefsStore.setProfileId(profileId);
+    m_cwPrefs = m_cwPrefsStore.load();
+    rebuildModel();
+    emit cwPrefsChanged();
 }
 
 void WatchRecorder::rebuildModel()

@@ -13,6 +13,8 @@
 
 #include <optional>
 
+#include "nuvio/settings/ActiveProfile.h"
+
 namespace nuvio::playback {
 
 struct CachedLink {
@@ -39,7 +41,8 @@ struct CachedLink {
 /// Profile-scoped entry access over the shared store.
 class StreamLinkCache final {
 public:
-    explicit StreamLinkCache(int profileId = 1);
+    explicit StreamLinkCache(
+        int profileId = nuvio::settings::ActiveProfile::id());
 
     void save(const QString& contentKey, const CachedLink& link,
               qint64 nowEpochMs);

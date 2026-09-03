@@ -5,12 +5,18 @@
 
 #include <memory>
 
+#include "nuvio/settings/ActiveProfile.h"
+
 #include "nuvio/settings/PropertiesStore.h"
 
 namespace nuvio::settings {
 
 namespace {
-constexpr auto kKeyName = "search_history_1";
+[[nodiscard]] std::string keyName()
+{
+    return "search_history_" +
+           std::to_string(ActiveProfile::id());
+}
 constexpr int  kMaxRecent = 10;
 constexpr int  kMinLength = 2;
 } // namespace
@@ -47,7 +53,7 @@ QVariantList SearchHistory::recent()
     QVariantList out;
     for (const auto& v :
          decode(QString::fromStdString(
-             m_store->getString(kKeyName).value_or(""))))
+             m_store->getString(keyName()).value_or(""))))
         out.append(v);
     return out;
 }
@@ -58,7 +64,7 @@ void SearchHistory::record(const QString& query)
     if (q.length() < kMinLength) return;
 
     QStringList cur =
-        decode(QString::fromStdString(m_store->getString(kKeyName)
+        decode(QString::fromStdString(m_store->getString(keyName())
                                           .value_or("")));
     cur.removeAll(q);
     cur.prepend(q);                       // move-to-front dedupe
@@ -72,7 +78,7 @@ void SearchHistory::record(const QString& query)
 void SearchHistory::remove(const QString& query)
 {
     QStringList cur =
-        decode(QString::fromStdString(m_store->getString(kKeyName)
+        decode(QString::fromStdString(m_store->getString(keyName())
                                           .value_or("")));
     if (!cur.contains(query)) return;
     cur.removeAll(query);
@@ -82,14 +88,14 @@ void SearchHistory::remove(const QString& query)
 
 void SearchHistory::clear()
 {
-    m_store->remove(kKeyName);
+    m_store->remove(keyName());
     m_store->persist();
     emit changed();
 }
 
 void SearchHistory::persistLocked(const QStringList& values)
 {
-    m_store->putString(kKeyName, encode(values).toStdString());
+    m_store->putString(keyName(), encode(values).toStdString());
     m_store->persist();
 }
 

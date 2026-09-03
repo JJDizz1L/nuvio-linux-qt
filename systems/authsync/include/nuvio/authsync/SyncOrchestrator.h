@@ -57,7 +57,11 @@ public:
                               QObject* parent = nullptr);
     ~SyncOrchestrator() override;
 
-    void setProfileId(int id) { m_profileId = id; }
+    void setProfileId(int id)
+    {
+        m_profileId = id;
+        m_passthrough.setProfileId(id);
+    }
     /// Test hook: shrink the push debounce window.
     void setDebounceMs(int ms) { m_debounce.setInterval(ms); }
     /// Remote-apply target for the CW payload string (optional; main.cpp

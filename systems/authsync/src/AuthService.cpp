@@ -14,6 +14,7 @@ namespace {
 constexpr auto kAccessToken  = "access_token";
 constexpr auto kRefreshToken = "refresh_token";
 constexpr auto kUserEmail    = "user_email";
+constexpr auto kUserId       = "user_id";   // P7: profiles payload needs it
 
 QNetworkRequest goTrueRequest(const AuthConfig& cfg, const QByteArray& url)
 {
@@ -47,6 +48,9 @@ void AuthService::restoreSession()
     const auto access  = m_store->getString(kAccessToken);
     const auto refresh = m_store->getString(kRefreshToken);
     const auto email   = m_store->getString(kUserEmail);
+    const auto userId  = m_store->getString(kUserId);
+    if (userId && !userId->empty())
+        m_userId = QString::fromStdString(*userId);
     if (!refresh || refresh->empty()) return;          // nothing stored
 
     if (access && !access->empty()) {
@@ -155,6 +159,10 @@ void AuthService::applyTokensFromJson(const QJsonObject& obj)
         src.value("user").toObject().value("email").toString(
             obj.value("email").toString());
     if (!mail.isEmpty()) m_email = mail;
+    // GoTrue nests the stable user id under user.id on both flows.
+    const QString uid = src.value("user").toObject().value("id").toString(
+        obj.value("user").toObject().value("id").toString());
+    if (!uid.isEmpty()) m_userId = uid;
 
     if (!m_accessToken.isEmpty()) {
         persistTokens();
@@ -172,6 +180,8 @@ void AuthService::persistTokens()
         m_store->putString(kRefreshToken, toStd(m_refreshToken));
     if (!m_email.isEmpty())
         m_store->putString(kUserEmail, m_email.toStdString());
+    if (!m_userId.isEmpty())
+        m_store->putString(kUserId, m_userId.toStdString());
 }
 
 void AuthService::clearStored()
@@ -179,6 +189,8 @@ void AuthService::clearStored()
     m_store->remove(kAccessToken);
     m_store->remove(kRefreshToken);
     m_store->remove(kUserEmail);
+    m_store->remove(kUserId);
+    m_userId.clear();
 }
 
 void AuthService::setSession(const bool active, const QString& email)

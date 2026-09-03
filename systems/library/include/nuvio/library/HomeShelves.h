@@ -18,6 +18,8 @@
 #include <QObject>
 #include <QVariantList>
 
+#include <nuvio/settings/ActiveProfile.h>
+
 #include "nuvio/library/HomeCatalogSettings.h"
 
 namespace nuvio::library {
@@ -58,6 +60,9 @@ public:
 
     Q_INVOKABLE void refresh();
 
+    /// Profile switches (P7): retargets prefs + refetches.
+    Q_INVOKABLE void setProfileId(int profileId);
+
     // Homescreen settings surface (persist + recompute, no refetch).
     Q_INVOKABLE void setHeroEnabled(bool on);
     Q_INVOKABLE void setShowCatalogType(bool on);
@@ -85,7 +90,8 @@ private:
     void pumpQueue();
 
     AddonRegistry* m_registry = nullptr;
-    HomeCatalogSettingsStore m_store{1};
+    HomeCatalogSettingsStore m_store{
+        nuvio::settings::ActiveProfile::id()};
     HomeCatalogPayload m_payload;
     QList<HomeShelfPref> m_rows;          // reconciled, ordered
     QHash<QString, HomeCatalogDefinition> m_defs;  // key -> transport

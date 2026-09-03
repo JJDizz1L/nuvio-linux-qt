@@ -31,6 +31,8 @@ public:
     Q_INVOKABLE void record(const QString& query);
     Q_INVOKABLE void remove(const QString& query);
     Q_INVOKABLE void clear();
+    /// Re-reads the store (profile switches change the key underneath).
+    Q_INVOKABLE void refresh() { emit changed(); }
 
     // Pure codec (unit-tested): never throws on garbage -> empty list.
     [[nodiscard]] static QStringList decode(const QString& json);

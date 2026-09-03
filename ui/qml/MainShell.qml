@@ -45,6 +45,10 @@ ApplicationWindow {
         anchors.fill: parent
         visible: navigation.currentRoute === "welcome"
     }
+    Pages.ProfilesPage {
+        anchors.fill: parent
+        visible: navigation.currentRoute === "profiles"
+    }
     Pages.SettingsPage {
         anchors.fill: parent
         visible: navigation.currentRoute === "settings"

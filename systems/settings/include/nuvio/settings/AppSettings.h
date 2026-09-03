@@ -354,6 +354,9 @@ public:
     void                  setNextEpisodeThresholdMinutesBeforeEnd(float v);
 
     /// --- remote-profile-sync surface (leg 4) ---------------------------------
+    /// Re-emits every change signal (profile switches change the keys
+    /// underneath; QML bindings otherwise show the old profile's values).
+    Q_INVOKABLE void refreshAll();
     /// Current player-settings feature payload (Compose blob v3 fragment).
     [[nodiscard]] QJsonObject exportPlayerSyncPayload();
     /// Applies a remote player_settings fragment through THIS instance's own

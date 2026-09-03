@@ -43,6 +43,9 @@ public:
     /// time call; refetches anything uncached async (changed() per arrival).
     Q_INVOKABLE void load();
 
+    /// Profile switches (P7): reloads rows for the new profile.
+    Q_INVOKABLE void setProfileId(int profileId);
+
     /// Normalizes like Compose, dedupes, fetches + validates the manifest,
     /// then persists truth+enabled(true)+cache. Emits addResult(ok, message).
     Q_INVOKABLE void add(const QString& manifestUrl);
@@ -74,6 +77,7 @@ private:
     void rebuildRow(const QString& url, const QByteArray& body);
 
     QVariantList m_addons;
+    int m_profileId = nuvio::settings::ActiveProfile::id();
     // Single long-lived store instances: PropertiesStore snapshots at
     // construction, so per-call instances would clobber each other's writes.
     std::unique_ptr<nuvio::settings::PropertiesStore> m_truth;

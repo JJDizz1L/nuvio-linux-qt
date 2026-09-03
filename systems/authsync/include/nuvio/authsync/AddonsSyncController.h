@@ -32,6 +32,8 @@ public:
     void setDebounceMs(int ms) { m_debounce.setInterval(ms); }
     void pullNow();
     void beginObserving();   // registry changes -> debounced push
+    /// Profile switches (P7): retargets params (rows follow the registry).
+    void setProfileId(int id) { m_profileId = id; }
 
 signals:
     void pullFinished(bool ok, int applied);
@@ -48,6 +50,7 @@ private:
     TokenProvider m_token;
     SyncRpcClient* m_client = nullptr;
     QTimer m_debounce;
+    int m_profileId = 1;
 
     int  m_inFlight = 0;
     bool m_lastPushValid = false;

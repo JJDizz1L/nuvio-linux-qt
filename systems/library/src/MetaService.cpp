@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <cstdio>
 
+#include "nuvio/settings/ActiveProfile.h"
 #include "nuvio/settings/PropertiesStore.h"
 
 namespace nuvio::library {
@@ -97,7 +98,9 @@ QString MetaService::seasonViewMode() const
 {
     nuvio::settings::PropertiesStore store(
         nuvio::settings::PropertiesStore::defaultPath("season_view_mode"));
-    const auto raw = store.getString("season_view_mode_1");
+    const auto raw = store.getString(
+        "season_view_mode_" +
+        std::to_string(nuvio::settings::ActiveProfile::id()));
     if (!raw) return QStringLiteral("posters");   // Compose default
     const QString v = QString::fromStdString(*raw).toLower();
     return v == QLatin1String("text") ? QStringLiteral("text")
@@ -113,7 +116,10 @@ void MetaService::setSeasonViewMode(const QString& mode)
     if (seasonViewMode() == v) return;
     nuvio::settings::PropertiesStore store(
         nuvio::settings::PropertiesStore::defaultPath("season_view_mode"));
-    store.putString("season_view_mode_1", v.toStdString());
+    store.putString("season_view_mode_" +
+                        std::to_string(
+                            nuvio::settings::ActiveProfile::id()),
+                    v.toStdString());
     emit seasonViewModeChanged();
 }
 

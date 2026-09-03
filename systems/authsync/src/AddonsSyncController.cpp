@@ -69,8 +69,8 @@ void AddonsSyncController::pullNow()
         emit pullFinished(ok, applied);
     });
     m_client->get(QStringLiteral(
-        "addons?profile_id=eq.1&select=url,name,enabled,sort_order"
-        "&order=sort_order.asc"));
+        "addons?profile_id=eq.%1&select=url,name,enabled,sort_order"
+        "&order=sort_order.asc").arg(m_profileId));
 }
 
 void AddonsSyncController::doPush()
@@ -84,7 +84,7 @@ void AddonsSyncController::doPush()
     if (m_lastPushValid && sig == m_lastPushSig) return;   // dedupe
 
     QJsonObject params{
-        {QStringLiteral("p_profile_id"), 1},
+        {QStringLiteral("p_profile_id"), m_profileId},
         {QStringLiteral("p_addons"), rows},
         {QStringLiteral("p_origin_client_id"), originId()},
     };

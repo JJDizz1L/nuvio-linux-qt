@@ -15,6 +15,7 @@
 #include <QVariantList>
 #include <QVariantMap>
 
+#include <nuvio/settings/ActiveProfile.h>
 #include "nuvio/watching/ContinueWatchingPrefs.h"
 #include "nuvio/watching/WatchProgress.h"
 
@@ -63,6 +64,10 @@ public:
         /// Reload the model from disk (e.g. on profile switch / app foreground).
     Q_INVOKABLE void refresh();
 
+    /// Profile switches (P7): retargets the store + prefs, reloads the
+    /// model and notifies every binding.
+    void setProfileId(int profileId);
+
     /// Manual watched toggles (QML MetaPage button). Marks drop the resume
     /// row (Compose parity); both emit watchedChanged for the sync leg.
     Q_INVOKABLE void markWatched(const QString& type, const QString& id,
@@ -110,7 +115,8 @@ private:
     void rebuildModel();
 
     WatchingStore* m_store;
-    ContinueWatchingPrefsStore m_cwPrefsStore{kDefaultProfileId};
+    ContinueWatchingPrefsStore m_cwPrefsStore{
+        nuvio::settings::ActiveProfile::id()};
     ContinueWatchingPrefs m_cwPrefs{};
     bool m_hasSession = false;
     WatchEntry m_session{};     // current session identity + last position

@@ -5,6 +5,7 @@
 #include <limits>
 
 #include "nuvio/settings/SyncPlayerSettings.h"
+#include <nuvio/settings/ActiveProfile.h>
 #include <nuvio/settings/PropertiesStore.h>
 
 namespace nuvio::settings {
@@ -67,11 +68,10 @@ namespace nuvio::settings {
 // ---------------------------------------------------------------------------
 
 namespace {
-constexpr int kProfileId = 1;   // Compose activeProfileIndex default
-
 [[nodiscard]] std::string profileScoped(const char* key)
 {
-    return std::string(key) + "_" + std::to_string(kProfileId);
+    return std::string(key) + "_" +
+           std::to_string(ActiveProfile::id());
 }
 
 // stream_cache_size enum <-> MB int (Compose StreamCacheSize).
@@ -1130,6 +1130,22 @@ void AppSettings::setNextEpisodeThresholdMinutesBeforeEnd(float v)
 }
 
 // ---- remote-profile-sync surface --------------------------------------------
+
+void AppSettings::refreshAll()
+{
+    emit decoderModeChanged();
+    emit cacheMbChanged();
+    emit torrentCacheSizeChanged();
+    emit preferredAudioLanguageChanged();
+    emit preferredSubtitleLanguageChanged();
+    emit useForcedSubtitlesChanged();
+    emit discordEnabledChanged();
+    emit subtitleStyleChanged();
+    emit hoverPreviewChanged();
+    emit streamAutoPlayChanged();
+    emit playerOptionsChanged();
+    emit darkThemeChanged();
+}
 
 QJsonObject AppSettings::exportPlayerSyncPayload()
 {

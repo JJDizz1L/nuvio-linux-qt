@@ -13,6 +13,8 @@
 #include <QString>
 #include <QVariantList>
 
+#include <nuvio/settings/ActiveProfile.h>
+
 #include <optional>
 
 namespace nuvio::library {
@@ -55,7 +57,12 @@ class LibraryStore final : public QObject {
     Q_PROPERTY(int count READ count NOTIFY changed)
 
 public:
-    explicit LibraryStore(int profileId = 1, QObject* parent = nullptr);
+    explicit LibraryStore(
+        int profileId = nuvio::settings::ActiveProfile::id(),
+        QObject* parent = nullptr);
+
+    /// Profile switches (P7): reloads + notifies.
+    void setProfileId(int profileId);
 
     [[nodiscard]] QVariantList itemsVariant() const;
     [[nodiscard]] int count() const;

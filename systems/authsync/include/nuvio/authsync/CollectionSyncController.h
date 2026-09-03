@@ -27,6 +27,8 @@ public:
     ~CollectionSyncController() override;
 
     void setDebounceMs(int ms) { m_debounce.setInterval(ms); }
+    /// Profile switches (P7): retargets all subsequent operations.
+    void setProfileId(int id) { m_profileId = id; }
 
     void onLocalCollectionsChanged();
     void pushNow();

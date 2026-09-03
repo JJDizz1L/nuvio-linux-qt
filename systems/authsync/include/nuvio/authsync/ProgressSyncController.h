@@ -41,6 +41,8 @@ public:
     ~ProgressSyncController() override;
 
     void setDebounceMs(int ms) { m_debounce.setInterval(ms); }
+    /// Profile switches (P7): retargets all subsequent operations.
+    void setProfileId(int id) { m_profileId = id; }
     /// Test hook: shrink the watched full-pull page size.
     void setWatchedPageSize(int n) { m_watchPageSize = n; }
 

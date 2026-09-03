@@ -111,6 +111,14 @@ LibraryStore::LibraryStore(int profileId, QObject* parent)
     load();
 }
 
+void LibraryStore::setProfileId(int profileId)
+{
+    if (m_profileId == profileId) return;
+    m_profileId = profileId;
+    load();
+    emit changed();
+}
+
 QVariantList LibraryStore::itemsVariant() const
 {
     QVariantList out;
@@ -236,8 +244,12 @@ void LibraryStore::savePayload(const QJsonObject& payload)
 void LibraryStore::load()
 {
     const QJsonObject payload = loadPayload();
-    if (payload.isEmpty()) return;   // fresh profile (or garbage: defaults)
     m_items.clear();
+    m_pendingUpserts.clear();
+    m_pendingDeletes.clear();
+    m_deltaCursorEventId = 0;
+    m_deltaInitialized = false;
+    if (payload.isEmpty()) return;   // fresh profile (or garbage: defaults)
     for (const QJsonValue& v :
          payload.value(QStringLiteral("items")).toArray()) {
         LibraryItem it = itemFromJson(v.toObject());

@@ -35,6 +35,8 @@ public:
     [[nodiscard]] bool    configured() const { return m_cfg.valid(); }
     [[nodiscard]] bool    sessionActive() const { return m_active; }
     [[nodiscard]] QString userEmail() const { return m_email; }
+    /// Stable GoTrue user id (persisted; "" when unknown). Profiles payload.
+    [[nodiscard]] QString userId() const { return m_userId; }
     /// Current user JWT (empty when signed out). Consumed by the sync RPC
     /// client; GoTrue endpoints intentionally keep using the anon key.
     [[nodiscard]] QByteArray accessToken() const { return m_accessToken; }
@@ -65,6 +67,7 @@ private:
 
     bool       m_active      = false;
     QString    m_email;
+    QString    m_userId;
     QByteArray m_accessToken;
     QByteArray m_refreshToken;
 };

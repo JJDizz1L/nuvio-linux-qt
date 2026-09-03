@@ -143,6 +143,18 @@ CollectionStore::CollectionStore(int profileId, QObject* parent)
     load();
 }
 
+void CollectionStore::setProfileId(int profileId)
+{
+    if (m_profileId == profileId) return;
+    m_profileId = profileId;
+    m_folderCollection.clear();
+    m_folderId.clear();
+    m_folderItems.clear();
+    load();
+    emit changed();
+    emit folderChanged();
+}
+
 void CollectionStore::setAddonRegistry(AddonRegistry* registry)
 {
     m_registry = registry;
@@ -391,6 +403,7 @@ void CollectionStore::load()
     nuvio::settings::PropertiesStore store(
         nuvio::settings::PropertiesStore::defaultPath("collections"));
     const auto raw = store.getString(profileKey(m_profileId));
+    m_collections.clear();
     if (!raw || raw->empty()) return;
     m_collections = CollectionCodec::decode(QString::fromStdString(*raw));
 }

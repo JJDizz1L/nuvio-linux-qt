@@ -15,6 +15,8 @@
 #include <QString>
 #include <QVariantList>
 
+#include <nuvio/settings/ActiveProfile.h>
+
 class QNetworkAccessManager;
 
 namespace nuvio::library {
@@ -64,7 +66,12 @@ class CollectionStore final : public QObject {
     Q_INVOKABLE void openCollection(const QString& id);
 
 public:
-    explicit CollectionStore(int profileId = 1, QObject* parent = nullptr);
+    explicit CollectionStore(
+        int profileId = nuvio::settings::ActiveProfile::id(),
+        QObject* parent = nullptr);
+
+    /// Profile switches (P7): reloads + notifies.
+    void setProfileId(int profileId);
 
     /// Addon transport resolution for folder fetches (nullable in tests).
     void setAddonRegistry(AddonRegistry* registry);

@@ -14,6 +14,8 @@
 #include <QObject>
 #include <QString>
 
+#include <nuvio/settings/ActiveProfile.h>
+
 namespace nuvio::library {
 
 struct HomeShelfPref {
@@ -60,7 +62,11 @@ struct HomeCatalogDefinition {
 
 class HomeCatalogSettingsStore final {
 public:
-    explicit HomeCatalogSettingsStore(int profileId = 1);
+    explicit HomeCatalogSettingsStore(
+        int profileId = nuvio::settings::ActiveProfile::id());
+
+    /// Profile switches (P7).
+    void setProfileId(int profileId) { m_profileId = profileId; }
 
     [[nodiscard]] HomeCatalogPayload load() const;
     void save(const HomeCatalogPayload& payload);

@@ -31,6 +31,8 @@ public:
     ~LibrarySyncController() override;
 
     void setDebounceMs(int ms) { m_debounce.setInterval(ms); }
+    /// Profile switches (P7): retargets all subsequent operations.
+    void setProfileId(int id) { m_profileId = id; }
 
     /// Call whenever the local library changed; coalesced dirty push.
     void onLocalLibraryChanged();

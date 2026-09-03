@@ -19,6 +19,7 @@
 
 #include <memory>
 
+#include "nuvio/settings/ActiveProfile.h"
 #include "nuvio/settings/PropertiesStore.h"
 
 namespace nuvio::settings {
@@ -48,12 +49,17 @@ constexpr auto kNotifications = "notifications_settings";
                                         const QJsonObject& passthrough);
 
 /// Qt-local persistence for received-but-unowned features (store
-/// "sync_blob_passthrough", key = feature serial name, value = compact JSON
-/// of the feature value). Merge-only: features absent from a pull keep their
-/// cached copy (a partial pull must never evict).
+/// "sync_blob_passthrough", key "<feature>_<profileId>", value = compact
+/// JSON of the feature value). Merge-only: features absent from a pull keep
+/// their cached copy (a partial pull must never evict). Profile-suffixed:
+/// blob pulls are per-profile, so a switch must never forward the old
+/// profile's fragments.
 class BlobPassthroughStore final {
 public:
-    BlobPassthroughStore();
+    explicit BlobPassthroughStore(int profileId = ActiveProfile::id());
+
+    /// Profile switches (P7).
+    void setProfileId(int profileId);
 
     /// All cached features as a {"name": value} map (empty when cold).
     [[nodiscard]] QJsonObject loadAll();
@@ -64,6 +70,7 @@ private:
     // Long-lived member (snapshot-at-construction gotcha: per-call instances
     // would clobber concurrent writes).
     std::unique_ptr<PropertiesStore> m_store;
+    int m_profileId;
 };
 
 } // namespace nuvio::settings

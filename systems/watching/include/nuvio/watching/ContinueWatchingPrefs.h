@@ -54,6 +54,9 @@ class ContinueWatchingPrefsStore {
 public:
     explicit ContinueWatchingPrefsStore(int profileId);
 
+    /// Profile switches (P7).
+    void setProfileId(int profileId) { m_profileId = profileId; }
+
     [[nodiscard]] ContinueWatchingPrefs load() const;
     void save(const ContinueWatchingPrefs& prefs);
     /// Raw payload access for remote-sync apply (blob P1b): the sync blob

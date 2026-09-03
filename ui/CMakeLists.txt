@@ -18,6 +18,7 @@ qt_add_resources(nuvio_ui nuvio_qml
         qml/pages/VideoPage.qml
         qml/pages/HomePage.qml
         qml/pages/WelcomePage.qml
+        qml/pages/ProfilesPage.qml
         qml/pages/AddonsPage.qml
         qml/pages/LibraryPage.qml
         qml/pages/CollectionsPage.qml

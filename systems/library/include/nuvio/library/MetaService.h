@@ -48,6 +48,8 @@ public:
     Q_INVOKABLE void load(const QString& type, const QString& imdbId,
                           const QString& displayName = QString());
     Q_INVOKABLE void toggleSeasonViewMode();
+    /// Re-reads the view mode (profile switches change the key underneath).
+    Q_INVOKABLE void refreshSeasonViewMode() { emit seasonViewModeChanged(); }
 
     [[nodiscard]] QString seasonViewMode() const;
     void setSeasonViewMode(const QString& mode);

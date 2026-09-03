@@ -2,10 +2,9 @@
 
 // Storage-backed watch-state repository. Reads/writes the Compose-shared
 // `watch_progress.properties` / `watched.properties` files under the active
-// profile key (Compose `watch_progress_<profileId>` / `watched_<profileId>`;
-// the Qt line's default active profile is 1 — Compose's default
-// activeProfileIndex). Profile selection isn't wired in the Qt shell yet
-// (P4); mirroring the primary profile keeps files cross-line readable.
+// profile key (Compose `watch_progress_<profileId>` / `watched_<profileId>`).
+// Profile switches retarget via setProfileId (P7); the default follows the
+// active profile.
 //
 // Byte-for-byte compatible with Compose's DesktopStorage.Properties format
 // (UTF-16 \uXXXX escapes, key/value separation, atomic 0600 rewrite).
@@ -17,6 +16,7 @@
 
 #include <QString>
 
+#include <nuvio/settings/ActiveProfile.h>
 #include <nuvio/settings/PropertiesStore.h>
 #include "nuvio/watching/WatchProgress.h"
 
@@ -25,7 +25,12 @@ namespace nuvio::watching {
 class WatchingStore {
 public:
     /// Production: reads/writes the Compose shared files for `profileId`.
-    explicit WatchingStore(int profileId = kDefaultProfileId);
+    explicit WatchingStore(
+        int profileId = nuvio::settings::ActiveProfile::id());
+
+    /// Profile switches (P7): retargets keys; data re-reads per call, so
+    /// no reload is needed here (the recorder rebuilds its model).
+    void setProfileId(int profileId) { m_profileId = profileId; }
     /// Test: explicit files (keeps tests out of the live XDG config dir).
     WatchingStore(const QString& progressFile,
                   const QString& watchedFile,

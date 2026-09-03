@@ -7,18 +7,18 @@
 #include <QSet>
 #include <QString>
 
+#include "nuvio/settings/ActiveProfile.h"
 #include "nuvio/settings/PropertiesStore.h"
 #include "nuvio/settings/SyncPreferenceJson.h"
 
 namespace nuvio::settings {
 
 namespace {
-constexpr int kProfileId = 1;   // matches AppSettings (activeProfileIndex)
-
 // PropertiesStore keys are std::string_view-based (Java properties).
 [[nodiscard]] std::string scoped(const char* key)
 {
-    return std::string(key) + "_" + std::to_string(kProfileId);
+    return std::string(key) + "_" +
+           std::to_string(ActiveProfile::id());
 }
 
 [[nodiscard]] QString scopedKey(const char* key)

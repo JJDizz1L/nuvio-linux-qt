@@ -32,6 +32,8 @@
 #include "nuvio/authsync/ProgressSyncController.h"
 #include "nuvio/authsync/AuthService.h"
 #include "nuvio/authsync/SyncOrchestrator.h"
+#include "nuvio/profiles/ProfileManager.h"
+#include "nuvio/settings/ActiveProfile.h"
 #include "nuvio/library/AddonRegistry.h"
 #include "nuvio/library/CollectionStore.h"
 #include "nuvio/library/HomeShelves.h"
@@ -243,7 +245,8 @@ int main(int argc, char* argv[])
     auto progressSync =
         std::make_unique<nuvio::authsync::ProgressSyncController>(
             nuvio::authsync::AuthConfig::load(),
-            [ap = auth.get()] { return ap->accessToken(); }, 1);
+            [ap = auth.get()] { return ap->accessToken(); },
+            nuvio::settings::ActiveProfile::id());
     progressSync->setDebounceMs(1500);
 
     // Profile-settings sync (P4 leg 4): background startup pull + debounced
@@ -441,10 +444,11 @@ int main(int argc, char* argv[])
                                              controller.get()));
     // Watch-state foundation (systems/watching): Compose-parity resume +
     // watched persistence in the SHARED profile stores (watch_progress /
-    // watched .properties, profile key 1) so both builds read each other.
+    // watched .properties, active profile key) so both builds read each
+    // other.
     auto watchingStore =
         std::make_unique<nuvio::watching::WatchingStore>(
-            nuvio::watching::kDefaultProfileId);
+            nuvio::settings::ActiveProfile::id());
     auto watchRecorder = std::make_unique<nuvio::watching::WatchRecorder>(
         watchingStore.get());
     // P1b: the settings-blob CW payload applies into the recorder's store;
@@ -493,9 +497,11 @@ int main(int argc, char* argv[])
         });
     if (auth->sessionActive()) addonsSync->pullNow();
     // User library + collections (P5, Compose-shared profile stores).
-    auto libraryStore = std::make_unique<nuvio::library::LibraryStore>(1);
+    auto libraryStore = std::make_unique<nuvio::library::LibraryStore>(
+        nuvio::settings::ActiveProfile::id());
     auto collectionStore =
-        std::make_unique<nuvio::library::CollectionStore>(1);
+        std::make_unique<nuvio::library::CollectionStore>(
+            nuvio::settings::ActiveProfile::id());
     collectionStore->setAddonRegistry(addonreg.get());
     engine.rootContext()->setContextProperty(
         QStringLiteral("mylibrary"), QVariant::fromValue<QObject*>(
@@ -506,11 +512,13 @@ int main(int argc, char* argv[])
     auto librarySync =
         std::make_unique<nuvio::authsync::LibrarySyncController>(
             nuvio::authsync::AuthConfig::load(),
-            [ap = auth.get()] { return ap->accessToken(); }, 1);
+            [ap = auth.get()] { return ap->accessToken(); },
+            nuvio::settings::ActiveProfile::id());
     auto collectionSync =
         std::make_unique<nuvio::authsync::CollectionSyncController>(
             nuvio::authsync::AuthConfig::load(),
-            [ap = auth.get()] { return ap->accessToken(); }, 1);
+            [ap = auth.get()] { return ap->accessToken(); },
+            nuvio::settings::ActiveProfile::id());
     QObject::connect(libraryStore.get(),
                      &nuvio::library::LibraryStore::changed,
                      librarySync.get(),
@@ -559,6 +567,53 @@ int main(int argc, char* argv[])
             progressSync->fullSyncThenDeltas();
             progressSync->fullWatchedSyncThenDeltas();
         }
+    }
+
+    // User profiles (P7): local payload first (sets ActiveProfile), server
+    // pull on session activation. Switching fans out through
+    // activeProfileChanged: every profile-bound object reloads for the new
+    // index (stores read per-access keys, so only cached state reloads).
+    auto profileManager =
+        std::make_unique<nuvio::profiles::ProfileManager>(
+            nuvio::authsync::AuthConfig::load(),
+            [ap = auth.get()] { return ap->accessToken(); });
+    profileManager->setAuthUserId(auth->userId());
+    profileManager->loadLocal();
+    engine.rootContext()->setContextProperty(
+        QStringLiteral("profiles"), QVariant::fromValue<QObject*>(
+                                        profileManager.get()));
+    QObject::connect(
+        profileManager.get(),
+        &nuvio::profiles::ProfileManager::activeProfileChanged,
+        &app,
+        [&](int index) {
+            watchRecorder->setProfileId(index);
+            libraryStore->setProfileId(index);
+            collectionStore->setProfileId(index);
+            addonreg->setProfileId(index);
+            homeShelves->setProfileId(index);
+            searchHistory->refresh();
+            metaSvc->refreshSeasonViewMode();
+            settings->refreshAll();
+            syncOrch->setProfileId(index);
+            progressSync->setProfileId(index);
+            librarySync->setProfileId(index);
+            collectionSync->setProfileId(index);
+            addonsSync->setProfileId(index);
+        });
+    QObject::connect(
+        auth.get(), &nuvio::authsync::AuthService::stateChanged,
+        auth.get(),
+        [pm = profileManager.get(), ap = auth.get()] {
+            pm->setAuthUserId(ap->userId());
+            if (ap->sessionActive()) {
+                pm->pullProfiles();
+                pm->pullLocks();
+            }
+        });
+    if (auth->sessionActive()) {
+        profileManager->pullProfiles();
+        profileManager->pullLocks();
     }
 
     const QUrl shellUrl(QStringLiteral("qrc:/nuvio/qml/MainShell.qml"));
@@ -619,9 +674,14 @@ int main(int argc, char* argv[])
     }
 
 
-    // Route seeding: signed-out users land on Welcome; smoke harness and
-    // signed-in sessions go straight to their working routes.
-    if (!auth->sessionActive()) navigation->replaceTop("welcome");
+    // Route seeding: signed-out users land on Welcome; signed-in users
+    // who never picked a profile land on selection; smoke harness and
+    // settled sessions go straight to their working routes.
+    if (!auth->sessionActive())
+        navigation->replaceTop("welcome");
+    else if (!smoke && !profileManager->hasEverSelectedProfile() &&
+             profileManager->profilesVariant().size() > 1)
+        navigation->replaceTop("profiles");
 
     if (smoke) {
         static nuvio::app::SmokeRunner runner;   // app-lifetime harness

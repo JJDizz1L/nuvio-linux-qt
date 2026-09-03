@@ -153,12 +153,30 @@ backends yet (P3+ with their features).
   enrichment), external ratings beyond IMDb (Trakt/MDBList). All ride
   the tracking/TMDB backlog, not this phase.
 
-## P7 — Profiles full switcher (last partial)
+## P7 — Profiles full switcher (last partial) ✅ DONE 2026-09-03 (38/38 ctest, boot clean, smoke PASS vaapi-copy)
 
-Plumb `activeProfileId` (replace hardcoded 1); selection/edit/PIN/avatar/
-switcher UI; migrate all stores to `<base>_<id>`; profile-id params on sync
-controllers (server ids 1–6 only); device-link + server-discovery (re-verify
-names in Desktop first — earlier inventory only).
+- **Plumbing.** `ActiveProfile` process id (1..6, default 1) replaces every
+  hardcoded profile constant: AppSettings/SyncPlayerSettings/SearchHistory/
+  season-view/addon truth/link-cache key builders read it per access (no
+  reload needed); Watching/Library/Collection/CW-prefs/home-catalog
+  stores, addon registry, all six sync controllers and the passthrough
+  cache (now profile-suffixed) expose setProfileId; AuthService persists
+  GoTrue `user.id` (+ getter, cleared on sign-out).
+- **Module.** `systems/profiles`: verbatim payload/NuvioProfile/push/lock
+  shapes, `sha256("profile:<i>:<salt>:<pin>")` + ULong-hex salts,
+  per-index salted PIN cache; `ProfileManager` (local payload with
+  account-mismatch reset, server pull/push(sorted)/create/update/delete,
+  online PIN RPC + offline cache verify with updatedAt staleness,
+  lockout enforcement, in-session verified set, anonymous-local CRUD).
+- **UI + wiring.** `ProfilesPage` route (cards, inline PIN sheet, editor,
+  create, 6-cap) + Account switcher section; main.cpp manager, context
+  prop, 13-target reload fan-out, session-activation pulls, first-run
+  seeding to `profiles` when several exist and none was ever picked.
+- Deferred with reasons: device-link QR/code login + custom-server
+  discovery/switch (new auth flows + server-config storage, Appendix A);
+  avatar catalog fetch (server bucket; color-hex picker ships, ids/urls
+  pass through); `rememberLastProfile` honored in payload only (no
+  auto-resume UX yet).
 
 ## Appendix A — Not-started backlog (do NOT execute in this plan)
 

@@ -51,10 +51,27 @@ QJsonObject buildPushBlob(const QJsonObject& playerFragment,
                        {QStringLiteral("features"), features}};
 }
 
-BlobPassthroughStore::BlobPassthroughStore()
+BlobPassthroughStore::BlobPassthroughStore(int profileId)
     : m_store(std::make_unique<PropertiesStore>(
-          PropertiesStore::defaultPath("sync_blob_passthrough")))
+          PropertiesStore::defaultPath("sync_blob_passthrough"))),
+      m_profileId(profileId)
 {}
+
+void BlobPassthroughStore::setProfileId(int profileId)
+{
+    m_profileId = profileId;
+}
+
+namespace {
+[[nodiscard]] std::string suffixed(const char* name, int profileId)
+{
+    return std::string(name) + "_" + std::to_string(profileId);
+}
+[[nodiscard]] std::string suffixed(const QString& name, int profileId)
+{
+    return name.toStdString() + "_" + std::to_string(profileId);
+}
+} // namespace
 
 QJsonObject BlobPassthroughStore::loadAll()
 {
@@ -71,7 +88,9 @@ QJsonObject BlobPassthroughStore::loadAll()
     };
     QJsonObject out;
     for (const char* name : kNames) {
-        const auto raw = m_store->getString(name);
+        // NOTE: pre-P7 entries were stored unsuffixed; they orphan on first
+        // read here and refresh from the next pull (transient cache only).
+        const auto raw = m_store->getString(suffixed(name, m_profileId));
         if (!raw || raw->empty()) continue;
         const QByteArray bytes = QByteArray::fromStdString(*raw);
         // QJsonDocument cannot hold top-level scalars (probe-verified:
@@ -117,7 +136,8 @@ void BlobPassthroughStore::mergeFromPull(const QJsonObject& received)
             compact = QString::number(v.toDouble());
         else
             continue;   // null/undefined: never cache a wipe vector
-        m_store->putString(it.key().toStdString(), compact.toStdString());
+        m_store->putString(suffixed(it.key(), m_profileId),
+                           compact.toStdString());
     }
 }
 

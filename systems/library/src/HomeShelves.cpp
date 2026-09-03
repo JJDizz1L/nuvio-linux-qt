@@ -76,9 +76,16 @@ bool HomeShelves::hideUnreleasedContent() const
     return m_payload.hideUnreleasedContent;
 }
 
-void HomeShelves::refresh()
+void HomeShelves::setProfileId(int profileId)
 {
-    rebuildDefinitions();
+    // The store has no id getter; re-target blindly (cheap) and refresh.
+    m_store.setProfileId(profileId);
+    emit prefsChanged();
+    refresh();
+}
+
+void HomeShelves::refresh()
+{    rebuildDefinitions();
     if (m_rows.isEmpty()) {
         m_sections.clear();
         m_hero.clear();

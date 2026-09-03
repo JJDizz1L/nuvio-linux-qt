@@ -26,6 +26,13 @@ AddonRegistry::AddonRegistry(QObject* parent)
 
 AddonRegistry::~AddonRegistry() = default;
 
+void AddonRegistry::setProfileId(int profileId)
+{
+    if (m_profileId == profileId) return;
+    m_profileId = profileId;
+    load();   // truth reads follow ActiveProfile (set centrally first)
+}
+
 QVariantMap AddonRegistry::parseManifest(const QString& url,
                                          const QByteArray& body)
 {

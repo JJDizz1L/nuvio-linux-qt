@@ -26,6 +26,8 @@ namespace nuvio::settings {
 class PropertiesStore;
 }
 
+#include <nuvio/settings/ActiveProfile.h>
+
 namespace nuvio::library {
 
 class AddonStore final {
@@ -38,21 +40,25 @@ public:
     /// re-append query, percent-encode the unsafe-char table verbatim.
     [[nodiscard]] static QString normalizeManifestUrl(const QString& raw);
 
+    /// All truth accessors default to the ACTIVE profile (P7); explicit ids
+    /// remain for tests and the sync leg.
     [[nodiscard]] static QStringList loadInstalledUrls(
         nuvio::settings::PropertiesStore& truth,
-        int profileId                                   = kDefaultProfileId);
+        int profileId = nuvio::settings::ActiveProfile::id());
     static void saveInstalledUrls(nuvio::settings::PropertiesStore& truth,
                                   const QStringList& urls,
-                                  int profileId         = kDefaultProfileId);
+                                  int profileId = nuvio::settings::ActiveProfile::
+                                      id());
 
     using EnabledMap = QMap<QString, bool>;   // key = normalized manifest URL
 
     [[nodiscard]] static EnabledMap loadEnabledStates(
         nuvio::settings::PropertiesStore& truth,
-        int profileId                                   = kDefaultProfileId);
+        int profileId = nuvio::settings::ActiveProfile::id());
     static void saveEnabledStates(nuvio::settings::PropertiesStore& truth,
                                   const EnabledMap& states,
-                                  int profileId         = kDefaultProfileId);
+                                  int profileId = nuvio::settings::ActiveProfile::
+                                      id());
 
     [[nodiscard]] static QString cacheKeyFor(const QString& url);
     [[nodiscard]] static QByteArray loadCachedManifest(
