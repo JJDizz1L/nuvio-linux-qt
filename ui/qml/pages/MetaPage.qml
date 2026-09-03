@@ -241,9 +241,46 @@ Item {
                 visible: !isSeries && imdbId.length > 0
                          && !watching.isWatched(type, imdbId)
                 flat: true
-                text: qsTr("\u2713  Mark watched")
+                text: qsTr("✓  Mark watched")
                 onClicked: watching.markWatched(type, imdbId, -1, -1,
                                                 Date.now())
+            }
+
+            // My Library toggle (P5, shared profile store). Movies toggle
+            // the title; series toggle per-episode below.
+            Button {
+                visible: !isSeries && imdbId.length > 0
+                flat: true
+                text: mylibrary.isInLibrary(type, imdbId)
+                      ? qsTr("In Library (tap to remove)")
+                      : qsTr("+  Add to Library")
+                onClicked: {
+                    if (mylibrary.isInLibrary(type, imdbId))
+                        mylibrary.removeFromLibrary(type, imdbId)
+                    else
+                        mylibrary.addToLibrary(type, imdbId, cur.name || "",
+                                               cur.poster || "",
+                                               cur.description || "",
+                                               Date.now())
+                }
+            }
+            // Series toggle at title level (library rows are titles, not
+            // episodes - per-episode state lives in watch progress).
+            Button {
+                visible: isSeries && imdbId.length > 0
+                flat: true
+                text: mylibrary.isInLibrary(type, imdbId)
+                      ? qsTr("In Library (tap to remove)")
+                      : qsTr("+  Add Series to Library")
+                onClicked: {
+                    if (mylibrary.isInLibrary(type, imdbId))
+                        mylibrary.removeFromLibrary(type, imdbId)
+                    else
+                        mylibrary.addToLibrary(type, imdbId, cur.name || "",
+                                               cur.poster || "",
+                                               cur.description || "",
+                                               Date.now())
+                }
             }
 
             Button {

@@ -27,11 +27,15 @@
 #include "nuvio/mpv/MpvQuickItem.h"
 #include "nuvio/mpv/TrackAutoSelector.h"
 #include "nuvio/authsync/AddonsSyncController.h"
+#include "nuvio/authsync/CollectionSyncController.h"
+#include "nuvio/authsync/LibrarySyncController.h"
 #include "nuvio/authsync/ProgressSyncController.h"
 #include "nuvio/authsync/AuthService.h"
 #include "nuvio/authsync/SyncOrchestrator.h"
 #include "nuvio/library/AddonRegistry.h"
+#include "nuvio/library/CollectionStore.h"
 #include "nuvio/library/HomeShelves.h"
+#include "nuvio/library/LibraryStore.h"
 #include "nuvio/settings/PropertiesStore.h"
 #include "nuvio/settings/SearchHistory.h"
 #include "nuvio/settings/SyncIdentity.h"
@@ -488,6 +492,52 @@ int main(int argc, char* argv[])
             if (as && ap->sessionActive()) as->pullNow();
         });
     if (auth->sessionActive()) addonsSync->pullNow();
+    // User library + collections (P5, Compose-shared profile stores).
+    auto libraryStore = std::make_unique<nuvio::library::LibraryStore>(1);
+    auto collectionStore =
+        std::make_unique<nuvio::library::CollectionStore>(1);
+    collectionStore->setAddonRegistry(addonreg.get());
+    engine.rootContext()->setContextProperty(
+        QStringLiteral("mylibrary"), QVariant::fromValue<QObject*>(
+                                         libraryStore.get()));
+    engine.rootContext()->setContextProperty(
+        QStringLiteral("collections"), QVariant::fromValue<QObject*>(
+                                           collectionStore.get()));
+    auto librarySync =
+        std::make_unique<nuvio::authsync::LibrarySyncController>(
+            nuvio::authsync::AuthConfig::load(),
+            [ap = auth.get()] { return ap->accessToken(); }, 1);
+    auto collectionSync =
+        std::make_unique<nuvio::authsync::CollectionSyncController>(
+            nuvio::authsync::AuthConfig::load(),
+            [ap = auth.get()] { return ap->accessToken(); }, 1);
+    QObject::connect(libraryStore.get(),
+                     &nuvio::library::LibraryStore::changed,
+                     librarySync.get(),
+                     &nuvio::authsync::LibrarySyncController::
+                         onLocalLibraryChanged);
+    QObject::connect(collectionStore.get(),
+                     &nuvio::library::CollectionStore::changed,
+                     collectionSync.get(),
+                     &nuvio::authsync::CollectionSyncController::
+                         onLocalCollectionsChanged);
+    QObject::connect(
+        auth.get(), &nuvio::authsync::AuthService::stateChanged,
+        auth.get(),
+        [ls = librarySync.get(), cs = collectionSync.get(),
+         ap = auth.get()] {
+            if (ls && ap->sessionActive()) ls->fullLibrarySyncThenDeltas();
+        });
+    QObject::connect(
+        auth.get(), &nuvio::authsync::AuthService::stateChanged,
+        auth.get(),
+        [cs = collectionSync.get(), ap = auth.get()] {
+            if (cs && ap->sessionActive()) cs->pullNow();
+        });
+    if (auth->sessionActive()) {
+        librarySync->fullLibrarySyncThenDeltas();
+        collectionSync->pullNow();
+    }
     {
         // One full/delta pull per session activation (initial + re-login).
         bool initialSyncFired = false;

@@ -7,6 +7,9 @@ add_library(nuvio_library STATIC
     include/nuvio/library/AddonRegistry.h  src/AddonRegistry.cpp
     include/nuvio/library/HomeCatalogSettings.h src/HomeCatalogSettings.cpp
     include/nuvio/library/HomeShelves.h    src/HomeShelves.cpp
+    include/nuvio/library/LibraryStore.h   src/LibraryStore.cpp
+    include/nuvio/library/LibrarySyncCodec.h src/LibrarySyncCodec.cpp
+    include/nuvio/library/CollectionStore.h src/CollectionStore.cpp
     src/LibrarySystem.cpp)
 
 target_include_directories(nuvio_library PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
@@ -34,3 +37,8 @@ add_executable(nuvio_home_tests tests/HomeShelvesTests.cpp)
 target_link_libraries(nuvio_home_tests PRIVATE nuvio::library)
 nuvio_common_target_props(nuvio_home_tests)
 add_test(NAME nuvio_home COMMAND nuvio_home_tests)
+
+add_executable(nuvio_library_store_tests tests/LibraryStoreTests.cpp)
+target_link_libraries(nuvio_library_store_tests PRIVATE nuvio::library)
+nuvio_common_target_props(nuvio_library_store_tests)
+add_test(NAME nuvio_library_store COMMAND nuvio_library_store_tests)

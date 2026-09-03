@@ -150,24 +150,183 @@ Item {
         }
     }
 
-    // ---- rails -------------------------------------------------------------
-    ListView {
-        id: railList
+    // ---- my library + collections + catalog rails ------------------------
+    // My Library and Collections ride the shared Compose profile stores;
+    // catalog rails below are the live Cinemeta federation as before.
+    ScrollView {
         anchors.fill: parent
         anchors.topMargin: header.height
         clip: true
-        model: catalog.shelves.length
-        orientation: ListView.Vertical
-        spacing: Theme.spacingLg
 
-        ScrollBar.vertical: ScrollBar {}
+        Column {
+            width: parent.width
+            spacing: Theme.spacingLg
 
-        delegate: Item {
-            width: railList.width
-            height: 246
+            Column {
+                width: parent.width
+                spacing: 6
+                visible: mylibrary.count > 0
 
-            required property int index
-            readonly property var shelfInfo: catalog.shelves[index]
+                Text {
+                    x: Theme.spacingLg
+                    text: qsTr("My Library (%1)").arg(mylibrary.count)
+                    color: Theme.textPrimary
+                    font.pixelSize: 15
+                    font.weight: Font.DemiBold
+                }
+                ListView {
+                    width: parent.width
+                    height: 200
+                    clip: true
+                    orientation: ListView.Horizontal
+                    spacing: Theme.spacingSm
+                    model: mylibrary.items
+                    header: Item { width: Theme.spacingLg; height: 1 }
+
+                    delegate: Item {
+                        width: 130
+                        height: 196
+
+                        required property var modelData
+
+                        Rectangle {
+                            anchors.fill: parent
+                            color: "#1c1c22"
+                            radius: 6
+
+                            Image {
+                                anchors.fill: parent
+                                anchors.margins: 1
+                                sourceSize.width: 260
+                                fillMode: Image.PreserveAspectCrop
+                                asynchronous: true
+                                source: "image://poster/" + modelData.poster
+                            }
+                            Rectangle {
+                                visible: watching.isWatched(
+                                    modelData.type || "movie", modelData.id)
+                                anchors.top: parent.top
+                                anchors.right: parent.right
+                                anchors.margins: 6
+                                width: 22; height: 22
+                                radius: 11
+                                color: Theme.chromeScrim
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: "✓"
+                                    color: Theme.accent
+                                    font.pixelSize: 13
+                                }
+                            }
+                            MouseArea {
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: {
+                                    meta.load(modelData.type || "movie",
+                                              modelData.id, modelData.name)
+                                    navigation.push("meta")
+                                }
+                            }
+                            Text {
+                                anchors.bottom: parent.bottom
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                width: parent.width - 8
+                                horizontalAlignment: Text.AlignHCenter
+                                elide: Text.ElideRight
+                                text: modelData.name
+                                color: Theme.textPrimary
+                                font.pixelSize: 11
+                            }
+                        }
+                    }
+                }
+            }
+
+            Column {
+                width: parent.width
+                spacing: 6
+
+                Row {
+                    x: Theme.spacingLg
+                    spacing: Theme.spacingSm
+                    Text {
+                        text: qsTr("Collections (%1)")
+                              .arg(collections.collections.length)
+                        color: Theme.textPrimary
+                        font.pixelSize: 15
+                        font.weight: Font.DemiBold
+                        anchors.verticalCenter: parent.verticalCenter
+                    }
+                    Button {
+                        text: qsTr("Manage")
+                        flat: true
+                        onClicked: navigation.push("collections")
+                    }
+                }
+                ListView {
+                    visible: collections.collections.length > 0
+                    width: parent.width
+                    height: 110
+                    clip: true
+                    orientation: ListView.Horizontal
+                    spacing: Theme.spacingSm
+                    model: collections.collections
+                    header: Item { width: Theme.spacingLg; height: 1 }
+
+                    delegate: Item {
+                        width: 220
+                        height: 100
+
+                        required property var modelData
+
+                        Rectangle {
+                            anchors.fill: parent
+                            color: Theme.surface
+                            radius: 12
+                            border.width: 1
+                            border.color: "#26ffffff"
+                        }
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: {
+                                collections.openCollection(modelData.id)
+                                navigation.push("collectiondetail")
+                            }
+                        }
+                        Column {
+                            anchors.fill: parent
+                            anchors.margins: 12
+                            spacing: 4
+                            Text {
+                                width: parent.width
+                                text: (modelData.pinned ? "📌 " : "")
+                                      + modelData.title
+                                color: Theme.textPrimary
+                                font.pixelSize: 15
+                                font.weight: Font.DemiBold
+                                elide: Text.ElideRight
+                            }
+                            Text {
+                                text: qsTr("%n folder(s)", "",
+                                          modelData.folders.length)
+                                color: Theme.textSecondary
+                                font.pixelSize: 12
+                            }
+                        }
+                    }
+                }
+            }
+
+            Repeater {
+                model: catalog.shelves
+                delegate: Item {
+                    width: library.width
+                    height: 246
+
+                    required property var modelData
+                    readonly property var shelfInfo: modelData
 
             Column {
                 anchors.fill: parent
@@ -288,4 +447,6 @@ Item {
             }
         }
     }
+}
+}
 }

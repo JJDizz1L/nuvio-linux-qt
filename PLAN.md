@@ -115,12 +115,29 @@ backends yet (P3+ with their features).
   discover row (addon rails cover it; search-discover stays a later port);
   LibraryPage untouched (unification is P5 business).
 
-## P5 — Library depth
+## P5 — Library depth ✅ DONE 2026-09-03 (36/36 ctest, boot clean, smoke PASS vaapi-copy)
 
-`LibraryStore` + `CollectionStore` (Compose shapes, profile-scoped);
-My-Library + Collections sections; collection editor QML; library/
-collection sync adapters (full-then-delta family pattern). Unblocks
-`collection_mobile_settings` blob value.
+- **Stores.** `LibraryStore` (verbatim payload + `library_1`, item key
+  `<type>:<id>`, unknown members preserved, dirty upsert/delete flags,
+  envelope API mirroring WatchingStore) + `CollectionStore` (verbatim
+  collections array, TMDB/Trakt sources + foreign members preserved
+  through raw bags, full CRUD + folder/source editing, export/apply).
+- **Sync.** `LibrarySyncController` (offset-paged snapshot + legacy
+  migration + bare-Long cursor + delta with pending-wins + dirty
+  push/delete legs, batch-500 constants) + `CollectionSyncController`
+  (full pull replace + debounced full push). Wired in main.cpp
+  (change signals + session-activation pulls).
+- **UI.** LibraryPage gains My Library rail + Collections rail (Manage
+  button); MetaPage movie + series library toggles; `CollectionsPage`
+  manager (collections/folders/sources incl. addon-catalog picker);
+  `CollectionDetailPage` + `CollectionFolderPage` (source picker +
+  merged grid); routes `collections`/`collectiondetail`/
+  `collectionfolder`.
+- Found en route: re-add refreshed only the timestamp (names/posters
+  stuck) — now refreshes display fields too.
+- Deferred: display-settings sort/layout (no backend yet); hover
+  previews on the new rails (library cinemeta rails keep theirs);
+  `collection_mobile_settings` stays blob-passthrough (no mobile UI).
 
 ## P6 — Details depth
 

@@ -20,6 +20,9 @@ qt_add_resources(nuvio_ui nuvio_qml
         qml/pages/WelcomePage.qml
         qml/pages/AddonsPage.qml
         qml/pages/LibraryPage.qml
+        qml/pages/CollectionsPage.qml
+        qml/pages/CollectionDetailPage.qml
+        qml/pages/CollectionFolderPage.qml
         qml/pages/SearchPage.qml
         qml/pages/MetaPage.qml
         qml/pages/SettingsPage.qml

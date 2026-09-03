@@ -89,6 +89,18 @@ ApplicationWindow {
         anchors.fill: parent
         visible: navigation.currentRoute === "library"
     }
+    Pages.CollectionsPage {
+        anchors.fill: parent
+        visible: navigation.currentRoute === "collections"
+    }
+    Pages.CollectionDetailPage {
+        anchors.fill: parent
+        visible: navigation.currentRoute === "collectiondetail"
+    }
+    Pages.CollectionFolderPage {
+        anchors.fill: parent
+        visible: navigation.currentRoute === "collectionfolder"
+    }
     Pages.SearchPage {
         anchors.fill: parent
         visible: navigation.currentRoute === "search"

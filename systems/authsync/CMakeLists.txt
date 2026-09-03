@@ -8,6 +8,8 @@ add_library(nuvio_authsync STATIC
     include/nuvio/authsync/SyncRpcClient.h src/SyncRpcClient.cpp
     include/nuvio/authsync/SyncOrchestrator.h src/SyncOrchestrator.cpp
     include/nuvio/authsync/ProgressSyncController.h src/ProgressSyncController.cpp
+    include/nuvio/authsync/LibrarySyncController.h src/LibrarySyncController.cpp
+    include/nuvio/authsync/CollectionSyncController.h src/CollectionSyncController.cpp
     include/nuvio/authsync/AddonsSyncController.h src/AddonsSyncController.cpp
     src/AuthSyncSystem.cpp)
 
@@ -40,6 +42,14 @@ add_executable(nuvio_progress_sync_tests tests/ProgressSyncControllerTests.cpp)
 target_link_libraries(nuvio_progress_sync_tests PRIVATE nuvio::authsync nuvio::watching Qt6::Network)
 nuvio_common_target_props(nuvio_progress_sync_tests)
 add_test(NAME nuvio_progress_sync COMMAND nuvio_progress_sync_tests)
+add_executable(nuvio_library_sync_tests tests/LibrarySyncControllerTests.cpp)
+target_link_libraries(nuvio_library_sync_tests PRIVATE nuvio::authsync nuvio::library Qt6::Network)
+nuvio_common_target_props(nuvio_library_sync_tests)
+add_test(NAME nuvio_library_sync COMMAND nuvio_library_sync_tests)
+add_executable(nuvio_collection_sync_tests tests/CollectionSyncControllerTests.cpp)
+target_link_libraries(nuvio_collection_sync_tests PRIVATE nuvio::authsync nuvio::library Qt6::Network)
+nuvio_common_target_props(nuvio_collection_sync_tests)
+add_test(NAME nuvio_collection_sync COMMAND nuvio_collection_sync_tests)
 add_executable(nuvio_sync_contract_tests tests/SyncContractTests.cpp)
 target_link_libraries(nuvio_sync_contract_tests PRIVATE nuvio::authsync Qt6::Network)
 nuvio_common_target_props(nuvio_sync_contract_tests)
