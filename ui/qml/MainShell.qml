@@ -49,6 +49,34 @@ ApplicationWindow {
         anchors.fill: parent
         visible: navigation.currentRoute === "settings"
     }
+    Pages.SettingsAppearancePage {
+        anchors.fill: parent
+        visible: navigation.currentRoute === "settings-appearance"
+    }
+    Pages.SettingsPlaybackPage {
+        anchors.fill: parent
+        visible: navigation.currentRoute === "settings-playback"
+    }
+    Pages.SettingsSubtitlesPage {
+        anchors.fill: parent
+        visible: navigation.currentRoute === "settings-subtitles"
+    }
+    Pages.SettingsStreamsPage {
+        anchors.fill: parent
+        visible: navigation.currentRoute === "settings-streams"
+    }
+    Pages.SettingsContinueWatchingPage {
+        anchors.fill: parent
+        visible: navigation.currentRoute === "settings-continuewatching"
+    }
+    Pages.SettingsIntegrationsPage {
+        anchors.fill: parent
+        visible: navigation.currentRoute === "settings-integrations"
+    }
+    Pages.SettingsAccountPage {
+        anchors.fill: parent
+        visible: navigation.currentRoute === "settings-account"
+    }
     Pages.AddonsPage {
         anchors.fill: parent
         visible: navigation.currentRoute === "addons"

@@ -23,6 +23,13 @@ qt_add_resources(nuvio_ui nuvio_qml
         qml/pages/SearchPage.qml
         qml/pages/MetaPage.qml
         qml/pages/SettingsPage.qml
+        qml/pages/SettingsAppearancePage.qml
+        qml/pages/SettingsPlaybackPage.qml
+        qml/pages/SettingsSubtitlesPage.qml
+        qml/pages/SettingsStreamsPage.qml
+        qml/pages/SettingsContinueWatchingPage.qml
+        qml/pages/SettingsIntegrationsPage.qml
+        qml/pages/SettingsAccountPage.qml
         qml/components/TransportBar.qml
         assets/fonts/jetbrains_sans_regular.ttf
         assets/fonts/jetbrains_sans_semibold.ttf

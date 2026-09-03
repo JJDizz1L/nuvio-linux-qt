@@ -34,15 +34,23 @@ Skip list (Appendix B) is normative.
   `QJsonDocument`); two orchestrators pushing in one 200 ms window lose a
   reply in the single-threaded TCP fake (test uses an isolated pair now).
 
-## P2 — Settings split into pages (NEXT)
+## P2 — Settings split into pages ✅ DONE 2026-09-03 (28/28 ctest, boot clean zero QML errors)
 
-`ui/qml/pages/Settings/` root + leaves (Playback, Streams, Appearance,
-ContinueWatching, HoverPreview, Tracking, Tmdb, MdbList, Notifications,
-Integrations, Addons, Account). Keep `SettingsPage.qml` as forwarder during
-migration. Surface the P1a keys (sub bg/outline colors, strip-SDH,
-show-only-preferred, secondaries, resize, hold-to-speed, external player,
-reuse-link, autoplay sets + `ENABLED_PLUGINS_ONLY`, skip/next-episode
-family, libass, RTX key). Offscreen boot check per new QML file.
+Flat `pages/Settings<Leaf>Page.qml` leaves on `settings-<leaf>` routes
+(string stack — no C++ change): Appearance (theme/hover/overlay/parental/
+resize), Playback (decoder/cache/hold-to-speed/external/reuse/libass +
+synced-but-inert flags under an honest caption), Subtitles & tracks
+(style + bg/outline colors + SDH/show-only/forced + primary/secondary
+langs + startup mode), Streams & autoplay (mode/source incl.
+`ENABLED_PLUGINS_ONLY`/timeout incl. No-timeout/regex + scoped-set counts
+with clear + next-episode + skip-intro/AnimeSkip/IntroDb), Continue
+Watching (moved verbatim), Integrations (discord + torrent), Account
+(status + sign out / go-to-sign-in). `SettingsPage.qml` is the root list;
+every leaf `ScrollView`s (the old single page overflowed 720p); all leaves
+instantiate in `MainShell` so load-time boot checks cover them. Timeout
+combo display subset narrowed (stored values still snap full-range in C++).
+Tracking/TMDB/MDBList/notifications leaves deliberately absent — no
+backends yet (P3+ with their features).
 
 ## P3 — Player depth
 
