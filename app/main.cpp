@@ -37,6 +37,9 @@
 #include "nuvio/downloads/DownloadManager.h"
 #include "nuvio/mdblist/MdbListService.h"
 #include "nuvio/mdblist/MdbListSettings.h"
+#include "nuvio/membership/CommunityService.h"
+#include "nuvio/membership/MemberAccess.h"
+#include "nuvio/membership/MembershipOverview.h"
 #include "nuvio/notifications/ReleaseNotifications.h"
 #include "nuvio/tmdb/TmdbService.h"
 #include "nuvio/tmdb/TmdbSettings.h"
@@ -610,6 +613,33 @@ int main(int argc, char* argv[])
         QStringLiteral("notifications"), QVariant::fromValue<QObject*>(
                                              releaseNotifications.get()));
     releaseNotifications->refreshAsync();
+    // Supporter membership (A7): userId-scoped, NOT profile-scoped (the
+    // cache keys on the account, like the fork) - so no fan-out target.
+    // Auth changes drive verification; sign-out clears the cached access
+    // (fork clearLocalState parity).
+    auto memberAccess =
+        std::make_unique<nuvio::membership::MemberAccess>(auth.get());
+    auto membershipOverview =
+        std::make_unique<nuvio::membership::MembershipOverview>(auth.get());
+    auto community =
+        std::make_unique<nuvio::membership::CommunityService>();
+    QObject::connect(
+        auth.get(), &nuvio::authsync::AuthService::stateChanged,
+        auth.get(),
+        [ma = memberAccess.get(), ap = auth.get()] {
+            if (!ap->sessionActive()) ma->clearLocalState();
+        });
+    engine.rootContext()->setContextProperty(
+        QStringLiteral("memberAccess"), QVariant::fromValue<QObject*>(
+                                            memberAccess.get()));
+    engine.rootContext()->setContextProperty(
+        QStringLiteral("membership"), QVariant::fromValue<QObject*>(
+                                          membershipOverview.get()));
+    engine.rootContext()->setContextProperty(
+        QStringLiteral("community"), QVariant::fromValue<QObject*>(
+                                         community.get()));
+    memberAccess->refresh();
+    membershipOverview->refresh();
     // TMDB settings + id service (A5): the key travels the credential
     // family only; the blob carries the other 14 keys. Blob owns
     // tmdb_settings now (stripped of the key at assembly).

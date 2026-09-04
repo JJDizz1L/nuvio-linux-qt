@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Controls
+import "../components"
 import "../theme"
 
 // Settings > Account: sign-in state for the shared profile (Supabase auth
@@ -31,12 +32,17 @@ Item {
         }
     }
 
-    Column {
+    ScrollView {
         anchors.top: header.bottom
         anchors.left: parent.left
         anchors.right: parent.right
-        anchors.margins: Theme.spacingLg
-        spacing: Theme.spacingMd
+        anchors.bottom: parent.bottom
+        clip: true
+
+        Column {
+            width: parent.width
+            spacing: Theme.spacingMd
+            anchors.margins: Theme.spacingLg
 
         Text {
             visible: auth.sessionActive
@@ -124,6 +130,29 @@ Item {
             flat: true
             onClicked: navigation.push("profiles")
         }
+        // Supporter membership (A7): status card for the signed-in
+        // account (states mirror the Community page card).
+        Text {
+            visible: auth.sessionActive
+            x: Theme.spacingLg
+            text: qsTr("Membership")
+            color: Theme.textPrimary
+            font.pixelSize: 15
+            font.weight: Font.DemiBold
+        }
+        MembershipCard {
+            visible: auth.sessionActive
+            x: Theme.spacingLg
+            width: parent.width - 2 * Theme.spacingLg
+            height: implicitHeight
+        }
+        Button {
+            visible: auth.sessionActive
+            x: Theme.spacingLg
+            text: qsTr("Supporters & Contributors")
+            flat: true
+            onClicked: navigation.push("community")
+        }
         Text {
             visible: !auth.sessionActive
             text: qsTr("Not signed in. Sync stays off until you sign in.")
@@ -136,6 +165,7 @@ Item {
             x: Theme.spacingLg
             text: qsTr("Go to sign in")
             onClicked: navigation.push("welcome")
+        }
         }
     }
 }

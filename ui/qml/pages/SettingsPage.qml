@@ -65,6 +65,8 @@ Item {
                   hint: qsTr("Enrichment, API key, modules") },
                 { label: qsTr("MDBList"), route: "settings-mdblist",
                   hint: qsTr("External ratings, providers") },
+                { label: qsTr("Supporters & Contributors"), route: "community",
+                  hint: qsTr("Membership, credits, community") },
                 { label: qsTr("Downloads"), route: "downloads",
                   hint: qsTr("Offline files, active and completed") },
                 { label: qsTr("Integrations"),     route: "settings-integrations",

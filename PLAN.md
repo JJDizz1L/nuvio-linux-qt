@@ -392,6 +392,39 @@ cutover (DEB/RPM/Flatpak/AppImage, portal helper, signing, AUR).
   on a real detail page, cross-line `mdblist_settings` round-trip
   Compose↔Qt.
 
+### A7 Membership/supporter ✅ DONE 2026-09-03 (52/52 ctest, boot clean zero QML errors, smoke PASS vaapi-copy)
+
+- **S1 access engine.** `systems/membership`: tiers/entitlements
+  verbatim, userId-keyed cached payload (`member_access` file,
+  garbage/unknown-tier decode to None), `get_my_member_access` RPC
+  with 1/2/4s retry (cached access retained on failure), 15-minute
+  re-verification timer, signed-out reads None (this line has no
+  anonymous tier), `hasEntitlement()` QML hook for future cosmetic
+  gating.
+- **S2 overview.** `get_my_membership_overview` mapping verbatim
+  (grant/lifetime guards folded at parse, empty array rests
+  inactive), same-user refresh keeps the previous overview
+  (loading/refreshing split), failures keep state + message.
+- **S3 community.** Contributors/supporters-wall DTOs with verbatim
+  normalize/sort/key rules, env-overridable URLs (wall defaults to
+  nuvio.tv, contributions blank like the build default), ko-fi table,
+  level/date formatting; donation progress skipped (desktop policy
+  disables it).
+- **S4 UI + wiring.** Shared `MembershipCard` (loading/error/
+  subscription/connected/grant/non-member states, fork strings,
+  Patreon-manage vs donate actions) in the Account section and the
+  `CommunityPage` route (tabs, avatars, retry, external links) +
+  settings root entry; `memberAccess`/`membership`/`community`
+  context props, startup refresh, sign-out clears cached access.
+  UserId-scoped like the fork: deliberately NO profile fan-out
+  target (18th-slot thinking does not apply here).
+- Deferred with reasons: profile backgrounds/avatars fetch + theme
+  gating (need the bucket/avatar-catalog features; P7 avatar item
+  stands).
+- TEST-LATER: live RPC round-trip with a real supporter account
+  (tier + entitlements land, card states render), wall fetch against
+  the live endpoint, cross-account cache isolation on one machine.
+
 ## Appendix B — Skip / incompatible (normative)
 
 - Direct `.kt`/Compose import: impossible by toolchain (re-express only).

@@ -18,7 +18,7 @@ target_link_libraries(nuvio-linux-qt PRIVATE
     # one and --dump-modules reflects built reality (identity TUs only).
     nuvio::playback nuvio::library nuvio::authsync nuvio::profiles
     nuvio::debrid nuvio::downloads nuvio::notifications nuvio::tmdb
-    nuvio::mdblist
+    nuvio::mdblist nuvio::membership
     nuvio::tracking  nuvio::integrations nuvio::settings nuvio::trailer
     nuvio::watching)   # watch-state foundation (resume/watched recorder)
 

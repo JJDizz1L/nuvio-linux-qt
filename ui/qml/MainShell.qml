@@ -97,6 +97,10 @@ ApplicationWindow {
         anchors.fill: parent
         visible: navigation.currentRoute === "settings-mdblist"
     }
+    Pages.CommunityPage {
+        anchors.fill: parent
+        visible: navigation.currentRoute === "community"
+    }
     Pages.CloudPage {
         anchors.fill: parent
         visible: navigation.currentRoute === "cloud"
