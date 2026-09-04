@@ -212,7 +212,7 @@ backends yet (P3+ with their features).
   credential vault round-trip on the Tier-1 pattern.
 
 Remaining, in suggested order:
-Sentry; packaging
+packaging
 cutover (DEB/RPM/Flatpak/AppImage, portal helper, signing, AUR).
 
 ### A2 Debrid ✅ DONE 2026-09-03 (47/47 ctest, boot clean, smoke PASS vaapi-copy)
@@ -578,3 +578,33 @@ cutover (DEB/RPM/Flatpak/AppImage, portal helper, signing, AUR).
   are a no-op set here (device-code/PIN flows, no browser leg).
 - TEST-LATER: end-to-end link tap from a browser once scheme
   registration lands, addon-install link against a live manifest.
+
+### A12 Sentry ✅ DONE 2026-09-04 (62/62 ctest, boot clean zero QML errors, smoke PASS vaapi-copy)
+
+- **Kernel.** `systems/diagnostics`: `SentryMetadata` (platform/arch
+  buckets incl. the pinned Darwin→windows order quirk, deterministic
+  version code, release/dist shapes), `SentrySanitizer` (ignored texts
+  + drop predicate), `SentryEnvelope` (DSN parse, envelope URL/auth,
+  event JSON with tags/release/dist/env + capped breadcrumbs, never
+  request/user/serverName).
+- **Settings + client.** `SentrySettings` (shared
+  `nuvio_sentry_settings` store, default-on, `supported` = DSN
+  configured) + `SentryClient` (start-once, enable-driven active flag,
+  lifecycle crumb, 50-capped trail, QNAM envelope POST, pending-crash
+  flush). DSN rides `NUVIO_SENTRY_DSN` (empty = unsupported, toggle
+  inert); env via `NUVIO_SENTRY_ENVIRONMENT` else build type.
+- **Crash hooks (proven, not just wired).** terminate handler +
+  SIGSEGV/SIGABRT/SIGILL/SIGFPE/SIGBUS handlers write async-safe
+  markers under the shared cache dir, re-raise for core dumps, convert
+  to fatal events next launch. A /tmp scratch crasher PROVED
+  SIGSEGV→`signal=11` on disk (caught a real bug en route: the pending
+  dir was cached WITH its basename while the handler appended it
+  again — `pending/pending`, ENOENT, silent loss).
+- **UI.** Settings footer crash-reports Switch (bound to the shared
+  opt-in; honest "not configured" state without a DSN).
+- Divergences with reasons: no sentry-native (no minidumps/symbols —
+  that needs split debug info + upload, i.e. the packaging cutover);
+  no global Qt message handler (would reroute the journald logging
+  pipeline); no offline retry queue (fire-and-forget POST).
+- TEST-LATER: live-DSN round-trip (event + previous-session crash
+  arriving in the dashboard), sentry-native upgrade with symbols.

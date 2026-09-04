@@ -143,5 +143,26 @@ Item {
                 font.pixelSize: 11
             }
         }
+
+        // Crash reporting (Appendix A): opt-in toggle; inert without a
+        // configured DSN (supported parity).
+        Row {
+            width: parent.width
+            spacing: Theme.spacingMd
+            Switch {
+                anchors.verticalCenter: parent.verticalCenter
+                checked: sentry.enabled
+                enabled: sentry.supported
+                onToggled: sentry.setEnabled(checked)
+            }
+            Text {
+                anchors.verticalCenter: parent.verticalCenter
+                text: sentry.supported
+                      ? qsTr("Send crash reports (no personal data)")
+                      : qsTr("Crash reporting not configured in this build")
+                color: Theme.textDisabled
+                font.pixelSize: 11
+            }
+        }
     }
 }

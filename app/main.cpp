@@ -43,6 +43,7 @@
 #include "nuvio/membership/MembershipOverview.h"
 #include "nuvio/notifications/ReleaseNotifications.h"
 #include "nuvio/plugins/PluginRepository.h"
+#include "nuvio/diagnostics/SentryClient.h"
 #include "nuvio/deeplink/DeepLink.h"
 #include "nuvio/deeplink/DeepLinkRouter.h"
 #include "nuvio/updater/AppUpdater.h"
@@ -561,6 +562,16 @@ int main(int argc, char* argv[])
         QStringLiteral("updater"),
         QVariant::fromValue<QObject*>(appUpdater.get()));
     appUpdater->ensureAutoCheckStarted();
+    // Crash reporting (Appendix A): starts first so later init is
+    // covered; hooks arm only with a configured DSN. The opt-in shares
+    // the Compose desktop store (nuvio_sentry_settings).
+    auto sentry = std::make_unique<nuvio::diagnostics::SentryClient>(
+        QString::fromLatin1(NUVIO_VERSION_STRING),
+        QString::fromLatin1(BUILD_TYPE_NAME), true /* installHooks */);
+    engine.rootContext()->setContextProperty(
+        QStringLiteral("sentry"),
+        QVariant::fromValue<QObject*>(sentry.get()));
+    sentry->start();
     // User library + collections (P5, Compose-shared profile stores).
     auto libraryStore = std::make_unique<nuvio::library::LibraryStore>(
         nuvio::settings::ActiveProfile::id());
