@@ -1,0 +1,26 @@
+# Maintainer: JJDizz1L <https://github.com/JJDizz1L>
+pkgname=nuvio-linux-qt
+pkgver=0.1.20.0
+pkgrel=1
+pkgdesc="Nuvio media center for Linux (Qt Quick line): catalogs, torrents, debrid, tracking, watch sync"
+arch=('x86_64')
+url="https://github.com/JJDizz1L/nuvio-linux-qt"
+license=('GPL-3.0-or-later')
+depends=('qt6-base' 'qt6-declarative' 'mpv' 'hicolor-icon-theme')
+makedepends=('cmake' 'ninja' 'pkgconf')
+optdepends=('libnotify: episode-release desktop alerts')
+source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
+sha256sums=('SKIP')
+
+build() {
+    cmake -S "$pkgname-$pkgver" -B build -G Ninja \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DBUILD_TESTING=OFF \
+        -DNUVIO_INSTALL=ON \
+        -DCMAKE_INSTALL_PREFIX=/usr
+    cmake --build build
+}
+
+package() {
+    DESTDIR="$pkgdir" cmake --install build
+}

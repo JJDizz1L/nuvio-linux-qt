@@ -60,4 +60,11 @@ endif()
 if(NUVIO_INSTALL)
     include(GNUInstallDirs)
     install(TARGETS nuvio-linux-qt RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+    # Desktop integration (packaging cutover): entry + metainfo + icon.
+    install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/../packaging/io.github.jjdizz1l.NuvioLinux.desktop"
+            DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)
+    install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/../packaging/io.github.jjdizz1l.NuvioLinux.metainfo.xml"
+            DESTINATION ${CMAKE_INSTALL_DATADIR}/metainfo)
+    install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/../packaging/icons/io.github.jjdizz1l.NuvioLinux.svg"
+            DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/scalable/apps)
 endif()

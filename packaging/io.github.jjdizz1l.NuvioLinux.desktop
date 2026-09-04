@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Nuvio
+GenericName=Media Player
+Comment=Discover movies and shows, keep your library and watch progress in sync
+Exec=nuvio-linux-qt %U
+Icon=io.github.jjdizz1l.NuvioLinux
+Terminal=false
+Categories=AudioVideo;Video;Player;
+StartupNotify=true
+StartupWMClass=nuvio-linux-qt
+MimeType=x-scheme-handler/nuvio;x-scheme-handler/stremio;

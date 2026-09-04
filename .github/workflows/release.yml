@@ -1,0 +1,73 @@
+# Release: tagged `v*` builds the Linux artifacts the in-app updater
+# polls for (DEB + AppImage+zsync on the GitHub release). First tagged run
+# is TEST-LATER: no release has been cut from this line yet.
+name: Release Linux artifacts
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends --yes \
+            build-essential cmake ninja-build pkg-config \
+            qt6-base-dev qt6-declarative-dev \
+            libmpv-dev patchelf desktop-file-utils appstream \
+            dpkg-dev rpm flatpak-builder
+
+      - name: Import signing key (optional)
+        env:
+          KEYRING: ${{ secrets.NUVIO_SIGN_KEYRING }}
+        run: |
+          if [[ -n "$KEYRING" ]]; then
+            printf '%s' "$KEYRING" | base64 -d | gpg --batch --import
+          fi
+
+      - name: Configure + build + test
+        run: |
+          cmake -S . -B build/pkg -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON \
+            -DNUVIO_INSTALL=ON -DCMAKE_INSTALL_PREFIX=/usr
+          cmake --build build/pkg
+          ctest --test-dir build/pkg --timeout 120
+
+      - name: DEB + RPM
+        env:
+          NUVIO_SIGN_KEY: ${{ secrets.NUVIO_SIGN_KEY }}
+        run: |
+          cmake --build build/pkg --target package
+          mkdir -p dist && cp build/pkg/*.deb build/pkg/*.rpm dist/
+          ./packaging/sign-artifacts.sh dist/*
+
+      - name: AppImage
+        env:
+          APPIMAGE_UPDATE_INFORMATION: "gh-releases-zsync|JJDizz1L|nuvio-linux-qt|latest|*.AppImage.zsync"
+          NUVIO_SIGN_KEY: ${{ secrets.NUVIO_SIGN_KEY }}
+        run: |
+          rm -rf pkgroot && DESTDIR="$PWD/pkgroot" cmake --install build/pkg
+          curl -fsSL -o /tmp/appimagetool \
+            https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
+          chmod +x /tmp/appimagetool
+          APPIMAGETOOL_EXTRACT_AND_RUN=1 ./packaging/appimage/build-appimage.sh \
+            "$PWD/pkgroot" "dist/NuvioLinuxQt-${GITHUB_REF_NAME}-x86_64.AppImage" /tmp/appimagetool
+          ./packaging/sign-artifacts.sh dist/*
+
+      - name: Verify + publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ./packaging/verify-packaging.sh
+          gh release create "${GITHUB_REF_NAME}" --title "${GITHUB_REF_NAME}" \
+            --notes "Nuvio Linux Qt ${GITHUB_REF_NAME}" \
+            dist/*

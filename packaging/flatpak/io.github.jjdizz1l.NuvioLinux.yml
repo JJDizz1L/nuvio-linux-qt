@@ -1,0 +1,66 @@
+# Flatpak bundle (Qt line). Build from the repo root, e.g.:
+#   flatpak-builder --force-clean --repo=repo builddir \
+#       packaging/flatpak/io.github.jjdizz1l.NuvioLinux.yml
+# The app source is a sibling dir reference so local trees build without a
+# tag round-trip; release CI checks out the tag first (same content).
+app-id: io.github.jjdizz1l.NuvioLinux
+runtime: org.kde.Platform
+runtime-version: '6.8'
+sdk: org.kde.Sdk
+command: nuvio-linux-qt
+finish-args:
+  - --share=ipc
+  - --share=network
+  - --socket=x11
+  - --socket=wayland
+  - --socket=pulseaudio
+  - --device=all
+  - --filesystem=xdg-download
+  - --filesystem=xdg-run/pipewire-0:ro
+  - --filesystem=xdg-run/discord-ipc-0
+  - --filesystem=xdg-run/app/com.discordapp.Discord:create
+  # Our notify-send alerts address the session bus directly (the fork has
+  # no notifier, so this permission is a Qt-line addition, not a port).
+  - --talk-name=org.freedesktop.Notifications
+  - --env=LD_LIBRARY_PATH=/app/lib
+  - --env=XDG_DATA_DIRS=/app/share:/usr/share
+modules:
+  - name: libmpv
+    cleanup:
+      - /include
+      - /lib/pkgconfig
+    buildsystem: meson
+    config-opts:
+      - -Dbuild-date=false
+      - -Dcplayer=false
+      - -Dlibmpv=true
+      - -Dmanpage-build=disabled
+      - -Dwayland=enabled
+      - -Dx11=enabled
+      - -Dvulkan=enabled
+      - -Dgl=enabled
+      - -Degl=enabled
+      - -Degl-wayland=enabled
+      - -Degl-x11=enabled
+      - -Dvaapi=enabled
+      - -Dvaapi-wayland=enabled
+      - -Dvaapi-x11=enabled
+      - -Dcuda-hwaccel=enabled
+      - -Dcuda-interop=enabled
+      - -Dvdpau=enabled
+      - -Dvdpau-gl-x11=enabled
+    sources:
+      - type: archive
+        url: https://github.com/mpv-player/mpv/archive/refs/tags/v0.41.0.tar.gz
+        sha256: ee21092a5ee427353392360929dc64645c54479aefdb5babc5cfbb5fad626209
+  - name: nuvio-linux-qt
+    buildsystem: cmake-ninja
+    config-opts:
+      - -DCMAKE_BUILD_TYPE=Release
+      - -DBUILD_TESTING=OFF
+      - -DNUVIO_INSTALL=ON
+    sources:
+      - type: dir
+        path: ../..
+    # The cmake install tree (NUVIO_INSTALL=ON) already carries bin, the
+    # .desktop entry, metainfo, and icons - nothing to rearrange.

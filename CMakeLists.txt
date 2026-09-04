@@ -52,6 +52,13 @@ message(STATUS "Nuvio Qt line: mpv linkage -> ${NUVIO_MPVPKG}")
 
 include(CTest)
 
+# Install/packaging cutover (Appendix A): dev builds skip install rules;
+# packagers configure -DNUVIO_INSTALL=ON (CPack, DESTDIR installs).
+option(NUVIO_INSTALL "Install the application + desktop integration files" OFF)
+if(NUVIO_INSTALL)
+    include(cmake/Packaging.cmake)
+endif()
+
 add_subdirectory(third_party/quickjs)   # vendored Bellard QuickJS (plugins)
 add_subdirectory(third_party/tiny-aes)  # public-domain AES core (plugins)
 add_subdirectory(third_party/gumbo)     # Apache HTML5 parser (plugins)

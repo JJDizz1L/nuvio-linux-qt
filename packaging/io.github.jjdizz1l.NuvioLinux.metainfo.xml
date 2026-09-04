@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.jjdizz1l.NuvioLinux</id>
+  <name>Nuvio</name>
+  <summary>Discover movies and shows, keep your library and watch progress in sync</summary>
+  <icon type="stock">io.github.jjdizz1l.NuvioLinux</icon>
+  <developer id="io.github.jjdizz1l">
+    <name>JJDizz1L</name>
+  </developer>
+  <developer_name>JJDizz1L</developer_name>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+  <launchable type="desktop-id">io.github.jjdizz1l.NuvioLinux.desktop</launchable>
+  <categories>
+    <category>AudioVideo</category>
+    <category>Video</category>
+  </categories>
+  <url type="homepage">https://github.com/JJDizz1L/nuvio-linux-qt</url>
+  <url type="help">https://github.com/JJDizz1L/nuvio-linux-qt/issues</url>
+  <description>
+    <p>Discover movies and shows, save favorites and watch from your own library.</p>
+    <p>Nuvio is a Qt Quick media center for Linux: addon catalogs, torrent and
+    debrid playback, offline downloads, Trakt/SIMKL scrobbling, and watch-state
+    sync that stays data-compatible with the Compose product line.</p>
+  </description>
+</component>

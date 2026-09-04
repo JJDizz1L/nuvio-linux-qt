@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <!-- Placeholder product mark (final artwork is a maintainer call):
+       deep-navy rounded square, accent ring, play wedge. -->
+  <rect x="16" y="16" width="480" height="480" rx="112" fill="#14202e"/>
+  <rect x="16" y="16" width="480" height="480" rx="112" fill="none" stroke="#82aaff" stroke-width="20" opacity="0.85"/>
+  <path d="M208 160 L352 256 L208 352 Z" fill="#82aaff"/>
+</svg>

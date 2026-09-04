@@ -580,7 +580,6 @@ cutover (DEB/RPM/Flatpak/AppImage, portal helper, signing, AUR).
   registration lands, addon-install link against a live manifest.
 
 ### A12 Sentry ✅ DONE 2026-09-04 (62/62 ctest, boot clean zero QML errors, smoke PASS vaapi-copy)
-
 - **Kernel.** `systems/diagnostics`: `SentryMetadata` (platform/arch
   buckets incl. the pinned Darwin→windows order quirk, deterministic
   version code, release/dist shapes), `SentrySanitizer` (ignored texts
@@ -608,3 +607,44 @@ cutover (DEB/RPM/Flatpak/AppImage, portal helper, signing, AUR).
   pipeline); no offline retry queue (fire-and-forget POST).
 - TEST-LATER: live-DSN round-trip (event + previous-session crash
   arriving in the dashboard), sentry-native upgrade with symbols.
+
+### A13 Packaging cutover ✅ DONE 2026-09-04 (62/62 ctest, verify-packaging green, real DEB+RPM+AppImage built, AppImage smoke PASS vaapi-copy)
+
+- **Install + CPack.** `NUVIO_INSTALL` option (default OFF, dev builds
+  untouched), FHS install (binary, TorrServer, .desktop, metainfo,
+  icon), `cmake/Packaging.cmake` (DEB shlibdeps + libnotify Recommends,
+  RPM autoreq; version from PROJECT_VERSION). Real
+  `nuvio-linux-qt-0.1.20.0` DEB+RPM built; contents + fields verified
+  (`Depends` resolves on Debian builders — this Arch box has no
+  shlibdeps db, so its DEB is structural proof; linkage verified via
+  `readelf -d` against the documented Qt6+libmpv closure instead of
+  hand-pinning per-release package-name lies).
+- **Desktop integration.** Entry (Exec `%U`, scheme handlers — closes
+  the A11 registration gap), metainfo (validate-clean), hand-authored
+  placeholder SVG icon (final artwork is a maintainer call).
+- **AppImage.** Auditable ldd vendoring (260 libs + Qt
+  platform/xcb/wayland/svg/TLS plugins + QtQuick/QtQml), host-provided
+  libc/NSS/GL-driver stack, zsync update-information wired to the A10
+  updater. linuxdeploy deliberately NOT used (its bundled strip
+  predates DT_RELR — proven fatal on this distro's libraries). The
+  41 MB bundle boots clean AND passes the smoke gate itself.
+- **Flatpak.** KDE 6.8 manifest, pinned libmpv v0.41.0, finish-args for
+  the app's real needs (+Notifications permission: our notify-send
+  alerts have no fork equivalent). `--show-manifest` parses.
+- **AUR + signing + release.** PKGBUILD (pkgver tracks project, pinned
+  by verify script), opt-in detached `.asc` signing (keyless CI stays
+  green), tag-driven release workflow publishing the artifacts the
+  updater polls.
+- **Portals.** No helper code needed (documented): scoped filesystems,
+  host-resolved xdg-open, session-bus notifications.
+- Gotchas (session-proven): `find -type f` misses symlinked libs —
+  the bundler was fine, the counter lied (260, not 15); native
+  appimagetool rejects `--appimage-extract-and-run` (AppImage-distro
+  flag — env-gate it); appimagetool drops the .zsync in CWD, not next
+  to the artifact (deleted one stray from the repo root); `set -e`
+  dies silently inside verify scripts when a `$(grep)` finds nothing
+  (keep pipelines exit-clean).
+- TEST-LATER: first tagged release run (workflow unrun), AUR submit,
+  Flatpak full build (needs SDK download), final icon artwork.
+
+## Appendix A — COMPLETE (A1–A13, all committed). Remaining work is user-driven: tagged release, live round-trips in TEST-LATER items, visual re-diffs.
