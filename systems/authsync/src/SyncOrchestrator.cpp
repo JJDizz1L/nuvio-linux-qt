@@ -13,6 +13,7 @@
 #include "nuvio/settings/SyncIdentity.h"
 #include "nuvio/settings/SyncPlayerSettings.h"
 #include "nuvio/settings/PropertiesStore.h"
+#include "nuvio/debrid/DebridSettings.h"
 #include "nuvio/watching/ContinueWatchingPrefs.h"
 #include "nuvio/watching/WatchRecorder.h"
 
@@ -106,11 +107,6 @@ void SyncOrchestrator::pullNow()
                 }
             }
 
-            if (player.isEmpty() && !applied) {
-                emit pullFinished(false);   // nothing we own yet
-                return;
-            }
-
             if (!player.isEmpty()) {
                 const QByteArray remoteSig = sigOf(player);
                 if (remoteSig != sigOf(m_settings->exportPlayerSyncPayload())) {
@@ -119,6 +115,29 @@ void SyncOrchestrator::pullNow()
                     m_applyRemote   = false;
                     applied         = true;
                 }
+            }
+
+            // Debrid fragment applies through the settings object (owned
+            // feature; per-key merge, absent keys untouched). Runs before
+            // the nothing-owned gate below so player-less blobs still land.
+            if (m_debrid) {
+                const QJsonObject debrid = features
+                                               .value(QLatin1String(
+                                                   settings::BlobFeature::
+                                                       kDebrid))
+                                               .toObject();
+                if (!debrid.isEmpty()) {
+                    m_applyRemote = true;   // suppress our own echo push
+                    const bool debridTouched =
+                        m_debrid->applySyncPayload(debrid);
+                    m_applyRemote   = false;
+                    applied         = applied || debridTouched;
+                }
+            }
+
+            if (player.isEmpty() && !applied) {
+                emit pullFinished(false);   // nothing we own yet
+                return;
             }
 
             if (!applied) {
@@ -188,8 +207,21 @@ QJsonObject SyncOrchestrator::fullPushBlob()
         passthrough.insert(
             QLatin1String(settings::BlobFeature::kContinueWatching),
             cwRaw);
-    return settings::buildPushBlob(m_settings->exportPlayerSyncPayload(),
-                                   passthrough);
+    QJsonObject player = m_settings->exportPlayerSyncPayload();
+    if (m_debrid) {
+        // Debrid is an OWNED feature now: fresh export joins the blob,
+        // minus the credential keys (Compose credential-policy parity -
+        // those sync through the provider-credentials family only).
+        QJsonObject debrid = m_debrid->exportSyncPayload();
+        for (const char* cred : {"debrid_torbox_api_key",
+                                 "debrid_premiumize_api_key",
+                                 "debrid_real_debrid_api_key"})
+            debrid.remove(QLatin1String(cred));
+        if (!debrid.isEmpty())
+            passthrough.insert(
+                QLatin1String(settings::BlobFeature::kDebrid), debrid);
+    }
+    return settings::buildPushBlob(player, passthrough);
 }
 
 QJsonObject SyncOrchestrator::baseParams()

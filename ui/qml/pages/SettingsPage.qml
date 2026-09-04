@@ -57,6 +57,8 @@ Item {
                   hint: qsTr("Hero, rails, rail order") },
                 { label: qsTr("Tracking"), route: "settings-tracking",
                   hint: qsTr("Trakt, SIMKL scrobbling") },
+                { label: qsTr("Debrid"), route: "settings-debrid",
+                  hint: qsTr("Providers, resolver, templates") },
                 { label: qsTr("Integrations"),     route: "settings-integrations",
                   hint: qsTr("Discord, torrent cache") },
                 { label: qsTr("Account"),          route: "settings-account",

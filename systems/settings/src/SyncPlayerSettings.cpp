@@ -14,16 +14,18 @@
 namespace nuvio::settings {
 
 namespace {
-// PropertiesStore keys are std::string_view-based (Java properties).
-[[nodiscard]] std::string scoped(const char* key)
+// Store keys are profile-scoped ("<key>_<id>"); blob keys are BARE
+// (Compose exportToSyncPayload parity - the "_1" suffix lives only in
+// the properties stores, never on the wire).
+[[nodiscard]] std::string storeKey(const char* key)
 {
     return std::string(key) + "_" +
            std::to_string(ActiveProfile::id());
 }
 
-[[nodiscard]] QString scopedKey(const char* key)
+[[nodiscard]] QString blobKey(const char* key)
 {
-    return QString::fromStdString(scoped(key));
+    return QString::fromLatin1(key);
 }
 
 // Compose PlayerSettingsStorage key names (unscoped forms), verbatim from
@@ -91,39 +93,39 @@ constexpr auto kNvidiaRtx = "nvidia_rtx_super_resolution_enabled";
 void putString(nuvio::settings::PropertiesStore& store, QJsonObject& out,
                const char* key)
 {
-    if (const auto v = store.getString(scoped(key)))
-        out.insert(scopedKey(key), SyncPreferenceJson::encodeString(
+    if (const auto v = store.getString(storeKey(key)))
+        out.insert(blobKey(key), SyncPreferenceJson::encodeString(
                                        QString::fromStdString(*v)));
 }
 
 void putBoolean(nuvio::settings::PropertiesStore& store, QJsonObject& out,
                 const char* key)
 {
-    if (const auto v = store.getBoolean(scoped(key)))
-        out.insert(scopedKey(key), SyncPreferenceJson::encodeBoolean(*v));
+    if (const auto v = store.getBoolean(storeKey(key)))
+        out.insert(blobKey(key), SyncPreferenceJson::encodeBoolean(*v));
 }
 
 void putInt(nuvio::settings::PropertiesStore& store, QJsonObject& out,
             const char* key)
 {
-    if (const auto v = store.getInt(scoped(key)))
-        out.insert(scopedKey(key), SyncPreferenceJson::encodeInt(*v));
+    if (const auto v = store.getInt(storeKey(key)))
+        out.insert(blobKey(key), SyncPreferenceJson::encodeInt(*v));
 }
 
 void putFloat(nuvio::settings::PropertiesStore& store, QJsonObject& out,
               const char* key)
 {
-    if (const auto v = store.getFloat(scoped(key)))
-        out.insert(scopedKey(key), SyncPreferenceJson::encodeFloat(*v));
+    if (const auto v = store.getFloat(storeKey(key)))
+        out.insert(blobKey(key), SyncPreferenceJson::encodeFloat(*v));
 }
 
 void putStringSet(nuvio::settings::PropertiesStore& store, QJsonObject& out,
                   const char* key)
 {
-    if (const auto v = store.getStringSet(scoped(key))) {
+    if (const auto v = store.getStringSet(storeKey(key))) {
         QSet<QString> set;
         for (const auto& s : *v) set.insert(QString::fromStdString(s));
-        out.insert(scopedKey(key), SyncPreferenceJson::encodeStringSet(set));
+        out.insert(blobKey(key), SyncPreferenceJson::encodeStringSet(set));
     }
 }
 
@@ -131,9 +133,9 @@ bool takeString(nuvio::settings::PropertiesStore& store,
                 const QJsonObject& payload, const char* key)
 {
     const auto v =
-        SyncPreferenceJson::decodeString(payload, scopedKey(key));
+        SyncPreferenceJson::decodeString(payload, blobKey(key));
     if (!v) return false;
-    store.putString(scoped(key), v->toStdString());
+    store.putString(storeKey(key), v->toStdString());
     return true;
 }
 
@@ -141,27 +143,27 @@ bool takeBoolean(nuvio::settings::PropertiesStore& store,
                  const QJsonObject& payload, const char* key)
 {
     const auto v =
-        SyncPreferenceJson::decodeBoolean(payload, scopedKey(key));
+        SyncPreferenceJson::decodeBoolean(payload, blobKey(key));
     if (!v) return false;
-    store.putBoolean(scoped(key), *v);
+    store.putBoolean(storeKey(key), *v);
     return true;
 }
 
 bool takeInt(nuvio::settings::PropertiesStore& store,
              const QJsonObject& payload, const char* key)
 {
-    const auto v = SyncPreferenceJson::decodeInt(payload, scopedKey(key));
+    const auto v = SyncPreferenceJson::decodeInt(payload, blobKey(key));
     if (!v) return false;
-    store.putInt(scoped(key), *v);
+    store.putInt(storeKey(key), *v);
     return true;
 }
 
 bool takeFloat(nuvio::settings::PropertiesStore& store,
                const QJsonObject& payload, const char* key)
 {
-    const auto v = SyncPreferenceJson::decodeFloat(payload, scopedKey(key));
+    const auto v = SyncPreferenceJson::decodeFloat(payload, blobKey(key));
     if (!v) return false;
-    store.putFloat(scoped(key), *v);
+    store.putFloat(storeKey(key), *v);
     return true;
 }
 
@@ -169,12 +171,12 @@ bool takeStringSet(nuvio::settings::PropertiesStore& store,
                    const QJsonObject& payload, const char* key)
 {
     const auto v =
-        SyncPreferenceJson::decodeStringSet(payload, scopedKey(key));
+        SyncPreferenceJson::decodeStringSet(payload, blobKey(key));
     if (!v) return false;
     std::vector<std::string> sorted;
     for (const auto& q : *v) sorted.push_back(q.toStdString());
     std::sort(sorted.begin(), sorted.end());
-    store.putStringSet(scoped(key), sorted);
+    store.putStringSet(storeKey(key), sorted);
     return true;
 }
 } // namespace

@@ -2,6 +2,8 @@
 // StreamResolver through its PUBLIC offline ingest path - no network.
 #include <nuvio/playback/PlaybackSession.h>
 #include <nuvio/playback/StreamResolver.h>
+#include <nuvio/debrid/DebridResolver.h>
+#include <nuvio/debrid/DebridSettings.h>
 #include <nuvio/p2p/P2pEngine.h>
 #include <nuvio/p2p/TorrServerProcess.h>
 
@@ -185,6 +187,31 @@ int main(int argc, char** argv)
         CHECK(cap2.unavail == 1 && cap2.ready == 0,
               "no addons -> immediate honest unavailability");
         CHECK(!lonely.hasSession(), "no phantom session");
+    }
+
+    { // D2: debrid tier without credentials falls through to the engine.
+        qunsetenv("NUVIO_TORRSERVER_BINARY");
+        TorrServerProcess proc("/tmp/nuvio-playback-tests/torrserver");
+        P2pEngine engine(&proc);
+        nuvio::debrid::DebridSettings debrid;
+        debrid.setEnabled(false);   // no credential path available
+        nuvio::debrid::DebridResolver resolver(&debrid);
+        PlaybackSession dsession(&r, &engine);
+        dsession.setDebridResolver(&resolver);
+        Capture capD;
+        capD.attach(dsession);
+
+        r.applyAddonStreams("movie/tt700", "alpha", bodyTorrent);
+        r.applyAddonStreams("movie/tt700", "beta", bodyTorrent);
+        dsession.requestPlay("movie", "tt700", "Via Debrid Fallback");
+        // Debrid declines synchronously (NoCredential) -> engine takes
+        // over silently, then fails offline -> honest unavailable.
+        const QDeadlineTimer drain(5000);
+        while (!drain.hasExpired() && capD.unavail == 0 &&
+               capD.ready == 0)
+            QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
+        CHECK(capD.unavail == 1 && capD.ready == 0,
+              "debrid decline falls through to engine, then toast");
     }
 
     { // P3a: reuse-link fast path serves fresh cache without resolving,

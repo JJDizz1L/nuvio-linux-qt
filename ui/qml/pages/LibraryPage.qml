@@ -148,6 +148,14 @@ Item {
             text: qsTr("Back")
             onClicked: navigation.pop()
         }
+        Button {
+            anchors.verticalCenter: parent.verticalCenter
+            anchors.right: parent.right
+            anchors.rightMargin: 110
+            text: qsTr("Cloud")
+            flat: true
+            onClicked: navigation.push("cloud")
+        }
     }
 
     // ---- my library + collections + catalog rails ------------------------

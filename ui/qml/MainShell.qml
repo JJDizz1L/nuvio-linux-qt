@@ -81,6 +81,14 @@ ApplicationWindow {
         anchors.fill: parent
         visible: navigation.currentRoute === "settings-tracking"
     }
+    Pages.SettingsDebridPage {
+        anchors.fill: parent
+        visible: navigation.currentRoute === "settings-debrid"
+    }
+    Pages.CloudPage {
+        anchors.fill: parent
+        visible: navigation.currentRoute === "cloud"
+    }
     Pages.SettingsIntegrationsPage {
         anchors.fill: parent
         visible: navigation.currentRoute === "settings-integrations"
@@ -175,6 +183,17 @@ ApplicationWindow {
             toastText.text = qsTr("Trailer unavailable right now")
             toast.opacity = 1
             toastTimer.restart()
+        }
+    }
+
+    // Cloud playback (D3): resolved provider urls play like trailers
+    // (no watch session - cloud ids are provider-scoped).
+    Connections {
+        target: cloud
+        function onPlaybackResolved(url) {
+            if (smokeActive) return
+            navigation.push("video")
+            pageItem.launchMedia(url, "")
         }
     }
 

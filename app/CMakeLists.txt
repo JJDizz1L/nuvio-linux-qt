@@ -17,6 +17,7 @@ target_link_libraries(nuvio-linux-qt PRIVATE
     # Reserved domains: linked so the dependency law is exercised from day
     # one and --dump-modules reflects built reality (identity TUs only).
     nuvio::playback nuvio::library nuvio::authsync nuvio::profiles
+    nuvio::debrid
     nuvio::tracking  nuvio::integrations nuvio::settings nuvio::trailer
     nuvio::watching)   # watch-state foundation (resume/watched recorder)
 

@@ -2,6 +2,7 @@
 
 #include <QDateTime>
 
+#include "nuvio/debrid/DebridResolver.h"
 #include "nuvio/p2p/P2pEngine.h"
 #include "nuvio/playback/NextEpisodeRules.h"
 #include "nuvio/playback/StreamLinkCache.h"
@@ -68,6 +69,45 @@ PlaybackSession::PlaybackSession(StreamResolver* resolver,
         // statsUpdated is deliberately not relayed yet: the player chrome
         // has no torrent-progress surface in this phase (plan P3 UI).
     }
+}
+
+void PlaybackSession::setDebridResolver(
+    nuvio::debrid::DebridResolver* resolver)
+{
+    if (m_debrid == resolver) return;
+    m_debrid = resolver;
+    if (!m_debrid) return;
+    connect(m_debrid, &nuvio::debrid::DebridResolver::resolved, this,
+            [this](const QString& url, const QString&, const QString&) {
+                if (!m_awaitingDebrid) return;
+                if (m_pendingType + u'/' + m_pendingId != m_debridKey) return;
+                m_awaitingDebrid = false;
+                // Debrid urls reuse the link cache when storable
+                // (expiring links are refused there by rule).
+                CachedLink link;
+                link.url = url;
+                link.streamName = m_pendingTitle;
+                const CompositeId keyParts = splitCompositeId(m_pendingId);
+                StreamLinkCache().save(
+                    streamLinkContentKey(
+                        m_pendingType, m_pendingId,
+                        keyParts.isEpisode() ? keyParts.parent : QString(),
+                        keyParts.season, keyParts.episode),
+                    link, QDateTime::currentMSecsSinceEpoch());
+                acceptSession(m_title, m_url, m_type, m_id, m_season,
+                              m_episode, m_isRelay, m_pendingTitle, url,
+                              m_pendingType, m_pendingId, false);
+                emit sessionChanged();
+                emit playbackReady(m_title, m_url);
+            });
+    connect(m_debrid, &nuvio::debrid::DebridResolver::unavailable, this,
+            [this](const QString&) {
+                if (!m_awaitingDebrid) return;
+                if (m_pendingType + u'/' + m_pendingId != m_debridKey) return;
+                m_awaitingDebrid = false;
+                // Fall through to the P2P tier with the same pending key.
+                decideTorrentTier();
+            });
 }
 
 void PlaybackSession::requestPlay(const QString& type, const QString& imdbId,
@@ -148,13 +188,34 @@ void PlaybackSession::decide()
         return;
     }
 
-    // Tier 2: nothing direct, but a torrent entry exists -> route through
-    // the local engine when one is attached. Its completion comes back as
-    // this object's own terminal signal (queued on both sides).
+    // Tier 2: nothing direct, but a torrent entry exists -> debrid first
+    // (when attached and able), P2P engine second. Both completions come
+    // back as this object's own terminal signals (queued on both sides).
+    decideTorrentTier();
+}
+
+void PlaybackSession::decideTorrentTier()
+{
     const QVariantMap tor =
         m_resolver->bestTorrent(m_pendingType, m_pendingId);
     const QString torHash = tor.value(QLatin1String("infoHash")).toString();
-    if (m_p2p && !torHash.isEmpty()) {
+    if (torHash.isEmpty()) {
+        // No state mutation: an unavailable result must not clobber a
+        // still-valid previous session the player route may show again.
+        emit playbackUnavailable(m_pendingTitle);
+        return;
+    }
+    if (m_debrid && m_debrid->canResolve()) {
+        const QString torTitle = tor.value(QLatin1String("title")).toString();
+        if (!torTitle.isEmpty()) m_pendingTitle = torTitle;
+        const CompositeId parts = splitCompositeId(m_pendingId);
+        m_debridKey = m_pendingType + u'/' + m_pendingId;
+        m_awaitingDebrid = true;
+        m_debrid->resolveTorrent(torHash, m_pendingTitle, parts.season,
+                                 parts.episode);
+        return;
+    }
+    if (m_p2p) {
         const QString torTitle = tor.value(QLatin1String("title")).toString();
         m_pendingTitle = torTitle.isEmpty() ? m_pendingTitle : torTitle;
         m_activeToken  = m_p2p->startStream(torHash);

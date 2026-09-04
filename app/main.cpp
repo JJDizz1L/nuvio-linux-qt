@@ -30,6 +30,10 @@
 #include "nuvio/authsync/CollectionSyncController.h"
 #include "nuvio/authsync/LibrarySyncController.h"
 #include "nuvio/authsync/ProviderCredsController.h"
+#include "nuvio/debrid/CloudLibrary.h"
+#include "nuvio/debrid/DebridAuth.h"
+#include "nuvio/debrid/DebridResolver.h"
+#include "nuvio/debrid/DebridSettings.h"
 #include "nuvio/authsync/ProgressSyncController.h"
 #include "nuvio/authsync/AuthService.h"
 #include "nuvio/authsync/SyncOrchestrator.h"
@@ -603,6 +607,33 @@ int main(int argc, char* argv[])
             if (cs && ap->sessionActive()) cs->syncNow();
         });
     if (auth->sessionActive()) credsSync->syncNow();
+    // Debrid providers (D1): settings + auth live here; template engine,
+    // resolver and cloud UI land in D2/D3. Context props for the D3 page.
+    auto debridSettings = std::make_unique<nuvio::debrid::DebridSettings>();
+    auto debridAuth =
+        std::make_unique<nuvio::debrid::DebridAuth>(debridSettings.get());
+    // Blob owns the debrid_settings feature now (stripped of credentials).
+    syncOrch->setDebridSettings(debridSettings.get());
+    QObject::connect(debridSettings.get(),
+                     &nuvio::debrid::DebridSettings::changed,
+                     syncOrch.get(),
+                     &nuvio::authsync::SyncOrchestrator::schedulePush);    engine.rootContext()->setContextProperty(
+        QStringLiteral("debrid"), QVariant::fromValue<QObject*>(
+                                      debridSettings.get()));
+    engine.rootContext()->setContextProperty(
+        QStringLiteral("debridauth"), QVariant::fromValue<QObject*>(
+                                          debridAuth.get()));
+    // Debrid unrestrict tier (D2): torrent entries resolve through the
+    // configured provider before falling back to the P2P engine.
+    auto debridResolver =
+        std::make_unique<nuvio::debrid::DebridResolver>(debridSettings.get());
+    playbackSession->setDebridResolver(debridResolver.get());
+    // Cloud library browser (D3): stored provider downloads.
+    auto cloudLibrary =
+        std::make_unique<nuvio::debrid::CloudLibrary>(debridSettings.get());
+    engine.rootContext()->setContextProperty(
+        QStringLiteral("cloud"), QVariant::fromValue<QObject*>(
+                                     cloudLibrary.get()));
     {
         // One full/delta pull per session activation (initial + re-login).
         bool initialSyncFired = false;
@@ -660,6 +691,7 @@ int main(int argc, char* argv[])
             collectionSync->setProfileId(index);
             addonsSync->setProfileId(index);
             credsSync->setProfileId(index);
+            debridAuth->setProfileId(index);
         });
     QObject::connect(
         auth.get(), &nuvio::authsync::AuthService::stateChanged,

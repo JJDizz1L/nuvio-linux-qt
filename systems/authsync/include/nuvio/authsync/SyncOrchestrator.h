@@ -38,6 +38,10 @@ namespace nuvio::settings {
 class AppSettings;
 }
 
+namespace nuvio::debrid {
+class DebridSettings;
+}
+
 namespace nuvio::watching {
 class WatchRecorder;
 }
@@ -70,13 +74,19 @@ public:
     {
         m_recorder = recorder;
     }
+    /// Debrid settings source for the blob's debrid_settings feature
+    /// (optional; absent keeps the player-only + passthrough shape).
+    void setDebridSettings(debrid::DebridSettings* debrid)
+    {
+        m_debrid = debrid;
+    }
 
     /// One guarded async pull; harmless no-op when signed out/busy.
     void pullNow();
     /// Connects AppSettings change signals -> debounced push.
     void beginObserving();
-    /// Schedules a debounced push (public for non-AppSettings owners whose
-    /// state also rides the blob, e.g. the CW recorder via main.cpp).
+    /// Schedules a debounced push (also wired to non-AppSettings blob
+    /// owners such as DebridSettings and the CW recorder in main.cpp).
     void schedulePush();
 
 signals:
@@ -93,6 +103,7 @@ private:
 
     settings::AppSettings* m_settings = nullptr;
     watching::WatchRecorder* m_recorder = nullptr;
+    debrid::DebridSettings* m_debrid = nullptr;
     AuthConfig m_cfg;
     TokenProvider m_token;
     SyncRpcClient* m_client = nullptr;

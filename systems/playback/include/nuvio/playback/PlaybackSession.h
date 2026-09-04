@@ -22,6 +22,12 @@
 // and relays its queued streamReady/streamFailed back onto this object's
 // own terminal signals - callers need no P2P awareness at all.
 //
+// Debrid tier (D2): when a DebridResolver is attached and can resolve,
+// torrent entries route through it FIRST (unrestrict/download link);
+// only its honest failure falls through to the P2P engine. Cached
+// debrid urls flow through the same reuse cache (expiring links are
+// refused there by rule).
+//
 // Offline-testable by construction: no QML, no GUI, no network here.
 
 #include <QObject>
@@ -30,6 +36,7 @@
 #include <functional>
 
 namespace nuvio::p2p { class P2pEngine; }
+namespace nuvio::debrid { class DebridResolver; }
 
 namespace nuvio::playback {
 
@@ -72,6 +79,8 @@ public:
     {
         m_reuseProvider = std::move(provider);
     }
+    /// Debrid unrestrict tier (D2, optional; null disables).
+    void setDebridResolver(nuvio::debrid::DebridResolver* resolver);
 
     /// User intent: play this item. Supersedes any earlier pending request.
     Q_INVOKABLE void requestPlay(const QString& type, const QString& imdbId,
@@ -98,12 +107,18 @@ private:
     /// and emit exactly one terminal signal (possibly deferred through the
     /// P2P engine).
     void decide();
+    /// Torrent tier: debrid unrestrict first, P2P engine second, honest
+    /// toast when neither can serve. Re-entered after debrid failure.
+    void decideTorrentTier();
 
     StreamResolver* m_resolver = nullptr;
     nuvio::p2p::P2pEngine* m_p2p = nullptr;
+    nuvio::debrid::DebridResolver* m_debrid = nullptr;
     ReusePolicyProvider m_reuseProvider;
     quint64 m_activeToken = 0;
     bool    m_awaitingP2p = false;
+    bool    m_awaitingDebrid = false;
+    QString m_debridKey;
 
     // Latest user intent (pending-key guard for stale completions).
     QString m_pendingType;

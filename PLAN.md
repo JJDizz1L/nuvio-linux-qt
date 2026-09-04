@@ -211,12 +211,42 @@ backends yet (P3+ with their features).
   trakt.tv/activate, simkl.com/pin), live scrobble round-trip,
   credential vault round-trip on the Tier-1 pattern.
 
-Remaining, in suggested order: Debrid (Torbox/Premiumize/RealDebrid +
-template engine) + cloud library; Downloads manager; episode-release
+Remaining, in suggested order: Downloads manager; episode-release
 notifications; TMDB service + settings; MDBList; membership/supporter;
 plugins runtime (QuickJS/WASM/DOM/crypto); home-catalog settings sync;
 in-app updater; deeplink (`nuvio://`/`stremio://`); Sentry; packaging
 cutover (DEB/RPM/Flatpak/AppImage, portal helper, signing, AUR).
+
+### A2 Debrid ✅ DONE 2026-09-03 (47/47 ctest, boot clean, smoke PASS vaapi-copy)
+
+- **D1 providers.** `systems/debrid`: verbatim provider table, full
+  `debrid_settings` key set with Compose defaults (incl. verbatim
+  template defaults), per-provider API clients (Torbox/Premiumize/RD
+  URLs, bodies, envelope parses, Bearer auth), device-code auth
+  (Torbox/Premiumize) + API-key validate, per-profile key storage.
+- **D2 unrestrict.** Template engine verbatim (incl. type-truthiness
+  subtleties caught by tests) + file selectors (name normalization,
+  pattern triple, rule chain) + `DebridResolver` (credential pick,
+  cache-check, multipart create, file select, download links;
+  RD never auto-resolves) wired as a session tier between direct and
+  P2P + stream values/formatter + debrid_settings blob fragment
+  (credentials stripped at assembly).
+- **D3 cloud + UI.** `CloudLibrary` (verbatim Torbox/Premiumize list
+  mappings, grouping, playable tables, per-type playback resolve) +
+  `SettingsDebridPage` (provider cards, resolver prefs, templates) +
+  `CloudPage` browser (refresh, files, play) + routes + shell play
+  routing (no watch session, trailer precedent).
+- **Interop fix (bisect-grade):** the blob carried profile-scoped
+  (`_1`) key names; Compose uses BARE keys on the wire (stores are
+  scoped). Player fragment fixed + suites converted; cross-line blob
+  round-trip stays TEST-LATER.
+- Deferred: metadata facts backfill (resolution/codec/tags for
+  templates), list sort/filter shaping, TMDB/Trakt collection sources
+  in the editor (preserved, not creatable), episode patterns beyond
+  SxxEyy in selectors.
+- TEST-LATER: real provider keys end-to-end (unrestrict, cloud
+  browse/play), device flows against live accounts, cross-line blob
+  round-trip Compose↔Qt.
 
 ## Appendix B — Skip / incompatible (normative)
 

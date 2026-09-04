@@ -55,13 +55,13 @@ int main(int argc, char** argv)
         const auto out = PlayerSettingsSync::exportSyncPayload(view);
         const QString json =
             QString::fromUtf8(QJsonDocument(out).toJson(QJsonDocument::Compact));
-        CHECK(json.contains(R"("preferred_audio_language_1":{"type":"string","value":"ja"})"),
+        CHECK(json.contains(R"("preferred_audio_language":{"type":"string","value":"ja"})"),
               "audio string envelope");
-        CHECK(json.contains(R"("subtitle_use_forced_subtitles_1":{"type":"boolean","value":false})"),
+        CHECK(json.contains(R"("subtitle_use_forced_subtitles":{"type":"boolean","value":false})"),
               "forced-subs boolean envelope");
-        CHECK(json.contains(R"("decoder_priority_1":{"type":"int","value":2})"),
+        CHECK(json.contains(R"("decoder_priority":{"type":"int","value":2})"),
               "decoder int envelope");
-        CHECK(!json.contains("preferred_subtitle_language_1"),
+        CHECK(!json.contains("preferred_subtitle_language"),
               "absent keys omitted from export");
     }
 
@@ -74,15 +74,15 @@ int main(int argc, char** argv)
         }
 
         QJsonObject remote;
-        remote.insert(QStringLiteral("preferred_audio_language_1"),
+        remote.insert(QStringLiteral("preferred_audio_language"),
                       SyncEnvelopeString(QStringLiteral("de")));
-        remote.insert(QStringLiteral("stream_cache_size_1"),
+        remote.insert(QStringLiteral("stream_cache_size"),
                       SyncEnvelopeString(QStringLiteral("GB_1")));
-        remote.insert(QStringLiteral("subtitle_use_forced_subtitles_1"),
+        remote.insert(QStringLiteral("subtitle_use_forced_subtitles"),
                       QJsonObject{{QLatin1String("type"), QLatin1String("boolean")},
                                   {QLatin1String("value"), true}});
         // Invalid entry: fractional int under int tag must be ignored.
-        remote.insert(QStringLiteral("decoder_priority_1"),
+        remote.insert(QStringLiteral("decoder_priority"),
                       QJsonObject{{QLatin1String("type"), QLatin1String("int")},
                                   {QLatin1String("value"), 0.5}});
         // Unknown future key: ignored entirely.
@@ -122,34 +122,34 @@ int main(int argc, char** argv)
         const QString json =
             QString::fromUtf8(QJsonDocument(out).toJson(QJsonDocument::Compact));
         CHECK(json.contains(
-                  R"("hold_to_speed_value_1":{"type":"float")"),
+                  R"("hold_to_speed_value":{"type":"float")"),
               "float envelope present");
         CHECK(json.contains(
-                  R"("auto_skip_segment_types_1":{"type":"string_set","value":["intro","recap"]})"),
+                  R"("auto_skip_segment_types":{"type":"string_set","value":["intro","recap"]})"),
               "string-set envelope sorted");
-        CHECK(!json.contains("introdb_api_key_1"),
+        CHECK(!json.contains("introdb_api_key"),
               "credential key never exported");
-        CHECK(!json.contains("animeskip_client_id_1"),
+        CHECK(!json.contains("animeskip_client_id"),
               "client-id credential never exported");
-        CHECK(!json.contains("android_playback_engine_1"),
+        CHECK(!json.contains("android_playback_engine"),
               "mobile-only keys absent without storage");
     }
 
     { // P1a apply: float/set/credential legs + invalid float ignored.
         QJsonObject remote;
-        remote.insert(QStringLiteral("hold_to_speed_value_1"),
+        remote.insert(QStringLiteral("hold_to_speed_value"),
                       QJsonObject{{QLatin1String("type"),
                                    QLatin1String("float")},
                                   {QLatin1String("value"), 1.5}});
-        remote.insert(QStringLiteral("auto_skip_segment_types_1"),
+        remote.insert(QStringLiteral("auto_skip_segment_types"),
                       QJsonObject{
                           {QLatin1String("type"),
                            QLatin1String("string_set")},
                           {QLatin1String("value"),
                            QJsonArray{QStringLiteral("outro")}}});
-        remote.insert(QStringLiteral("introdb_api_key_1"),
+        remote.insert(QStringLiteral("introdb_api_key"),
                       SyncEnvelopeString(QStringLiteral("k")));
-        remote.insert(QStringLiteral("next_episode_threshold_percent_v2_1"),
+        remote.insert(QStringLiteral("next_episode_threshold_percent_v2"),
                       QJsonObject{{QLatin1String("type"),
                                    QLatin1String("string")},
                                   {QLatin1String("value"),

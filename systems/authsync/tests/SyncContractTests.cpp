@@ -274,7 +274,7 @@ int main(int argc, char** argv)
                             .arg(QRandomGenerator::global()->bounded(
                                 1000000));
                     const QJsonObject playerFragment{
-                        {QStringLiteral("preferred_audio_language_1"),
+                        {QStringLiteral("preferred_audio_language"),
                          QJsonObject{{QLatin1String("type"),
                                       QLatin1String("string")},
                                      {QLatin1String("value"), marker}}}};
@@ -323,7 +323,7 @@ int main(int argc, char** argv)
 
                         const QString echoed = envelopeValue(
                             gout.doc,
-                            QStringLiteral("preferred_audio_language_1"));
+                            QStringLiteral("preferred_audio_language"));
                         std::fprintf(stderr, "TIER1 echoed=%s want=%s\n",
                                      echoed.toUtf8().constData(),
                                      marker.toUtf8().constData());

@@ -13,7 +13,7 @@ add_library(nuvio_playback STATIC
 
 target_include_directories(nuvio_playback PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_link_libraries(nuvio_playback
-    PUBLIC Qt6::Core Qt6::Network nuvio::p2p nuvio::settings)
+    PUBLIC Qt6::Core Qt6::Network nuvio::p2p nuvio::settings nuvio::debrid)
 nuvio_common_target_props(nuvio_playback)
 add_library(nuvio::playback ALIAS nuvio_playback)
 

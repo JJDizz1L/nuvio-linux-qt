@@ -4,6 +4,7 @@
 // sync_client_identity/player_settings live in the sandbox profile.
 #include <nuvio/authsync/SyncOrchestrator.h>
 
+#include <nuvio/debrid/DebridSettings.h>
 #include <nuvio/settings/AppSettings.h>
 #include <nuvio/watching/ContinueWatchingPrefs.h>
 
@@ -148,7 +149,7 @@ int main(int argc, char** argv)
     // Remote blob carrying ONE player field differing from local defaults.
     QByteArray remoteRow =
         R"({"version":3,"features":{"player_settings":)"
-        R"({"preferred_audio_language_1":{"type":"string","value":"de"}}}})";
+        R"({"preferred_audio_language":{"type":"string","value":"de"}}}})";
     rpc.setBlobReply(remoteRow);
 
     AppSettings settings;
@@ -191,7 +192,7 @@ int main(int argc, char** argv)
                 .toObject()
                 .value(QStringLiteral("player_settings"))
                 .toObject()
-                .value(QStringLiteral("preferred_audio_language_1"))
+                .value(QStringLiteral("preferred_audio_language"))
                 .toObject()
                 .value(QStringLiteral("value"))
                 .toString();
@@ -216,17 +217,17 @@ int main(int argc, char** argv)
                 .value(QStringLiteral("p_settings_json")).toObject()
                 .value(QStringLiteral("features")).toObject()
                 .value(QStringLiteral("player_settings")).toObject();
-        CHECK(player.value(QStringLiteral("preferred_subtitle_language_1"))
+        CHECK(player.value(QStringLiteral("preferred_subtitle_language"))
                         .toObject()
                         .value(QStringLiteral("value"))
                         .toString() == "fr",
               "subtitle lang in second push");
-        CHECK(!player.value(QStringLiteral("subtitle_use_forced_subtitles_1"))
+        CHECK(!player.value(QStringLiteral("subtitle_use_forced_subtitles"))
                         .toObject()
                         .value(QStringLiteral("value"))
                         .toBool(/* absent would be false too; key presence */),
               player.contains(QStringLiteral(
-                  "subtitle_use_forced_subtitles_1"))
+                  "subtitle_use_forced_subtitles"))
                   ? "forced subs false present in second push"
                   : "forced subs key ABSENT");
     }
@@ -245,7 +246,7 @@ int main(int argc, char** argv)
       // parser (unlike python's) rejects, failing the pull with an empty
       // doc while the HTTP status stayed 200.
         QJsonObject playerFragment{
-            {QStringLiteral("resize_mode_1"),
+            {QStringLiteral("resize_mode"),
              QJsonObject{{QLatin1String("type"), QLatin1String("string")},
                          {QLatin1String("value"),
                           QStringLiteral("Fill")}}},
@@ -304,7 +305,7 @@ int main(int argc, char** argv)
                   == "{\"isVisible\":false}",
               "CW payload re-sent from the shared store");
         CHECK(features.value(QStringLiteral("player_settings")).toObject()
-                          .value(QStringLiteral("hold_to_speed_enabled_1"))
+                          .value(QStringLiteral("hold_to_speed_enabled"))
                           .toObject()
                           .value(QStringLiteral("value")).toBool()
                       == false,
@@ -349,6 +350,51 @@ int main(int argc, char** argv)
         CHECK(pushes2 == 1, "push fires exactly once after the gate opens");
         CHECK(pushes == pushesBefore + 1,
               "other orchestrators unaffected by the isolated pair");
+    }
+
+    { // T8: owned debrid fragment applies into DebridSettings and rides
+      // the next push (credentials stripped at assembly). Assembled with
+      // statements, not nested initializers (brace golf bit us before).
+        auto envelope = [](const QString& type, const QJsonValue& value) {
+            return QJsonObject{{QLatin1String("type"), type},
+                               {QLatin1String("value"), value}};
+        };
+        QJsonObject debridFragment;
+        debridFragment.insert(QStringLiteral("debrid_enabled"),
+                              envelope("boolean", true));
+        debridFragment.insert(QStringLiteral("debrid_torbox_api_key"),
+                              envelope("string", "should-not-apply"));
+        QJsonObject debridFeatures;
+        debridFeatures.insert(QStringLiteral("player_settings"),
+                              QJsonObject{});
+        debridFeatures.insert(QStringLiteral("debrid_settings"),
+                              debridFragment);
+        QJsonObject blob;
+        blob.insert(QStringLiteral("version"), 3);
+        blob.insert(QStringLiteral("features"), debridFeatures);
+        rpc.setBlobReply(
+            QJsonDocument(blob).toJson(QJsonDocument::Compact));
+        nuvio::debrid::DebridSettings debrid;
+        orch.setDebridSettings(&debrid);
+        orch.pullNow();
+        pump(200);
+        CHECK(debrid.enabled(), "debrid fragment applied");
+        CHECK(debrid.providerApiKey("torbox") == "should-not-apply",
+              "credential keys accepted on apply (stored, never pushed)");
+        // Push carries the fragment back minus credentials.
+        settings.setPreferredAudioLanguage(QStringLiteral("it"));
+        pump(200);
+        const auto features =
+            QJsonDocument::fromJson(rpc.bodies.last()).object()
+                .value(QStringLiteral("p_settings_json")).toObject()
+                .value(QStringLiteral("features")).toObject();
+        CHECK(features.value(QStringLiteral("debrid_settings")).toObject()
+                          .value(QStringLiteral("debrid_enabled")).toObject()
+                          .value(QStringLiteral("value")).toBool() == true,
+              "owned debrid fragment pushed");
+        CHECK(!features.value(QStringLiteral("debrid_settings")).toObject()
+                   .contains(QStringLiteral("debrid_torbox_api_key")),
+              "credentials stripped from the pushed blob");
     }
 
     { // T5: signed-out orchestrator is a full no-op
