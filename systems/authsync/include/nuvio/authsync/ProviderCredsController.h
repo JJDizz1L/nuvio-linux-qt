@@ -1,13 +1,14 @@
 #pragma once
 
 // Provider-credential sync (T4): the Qt-owned API credentials
-// (animeskip client_id, introdb api_key, tmdb api_key) through the
-// Compose credential family (sync_push/seed/pull_provider_credentials),
-// mirroring ProviderCredentialSync for our key subset (debrid/mdblist
-// have no Qt features yet). Remote wins per provider; empty server +
-// local values seeds; pushes fire only on observed change (in-memory
-// baseline). The settings-blob export strips all three keys
-// (credential policy); this family is their only wire path.
+// (animeskip client_id, introdb api_key, tmdb api_key, mdblist api_key)
+// through the Compose credential family
+// (sync_push/seed/pull_provider_credentials), mirroring
+// ProviderCredentialSync for our key subset (debrid has no Qt feature
+// yet). Remote wins per provider; empty server + local values seeds;
+// pushes fire only on observed change (in-memory baseline). The
+// settings-blob export strips all credential keys (credential policy);
+// this family is their only wire path.
 
 #include <QByteArray>
 #include <QJsonObject>
@@ -27,6 +28,10 @@ namespace nuvio::tmdb {
 class TmdbSettings;
 }
 
+namespace nuvio::mdblist {
+class MdbListSettings;
+}
+
 namespace nuvio::authsync {
 
 class ProviderCredsController final : public QObject {
@@ -36,8 +41,10 @@ public:
     using TokenProvider = std::function<QByteArray()>;
 
     explicit ProviderCredsController(settings::AppSettings* settings,
-                                     tmdb::TmdbSettings* tmdb, AuthConfig cfg,
-                                     TokenProvider token, int profileId,
+                                     tmdb::TmdbSettings* tmdb,
+                                     mdblist::MdbListSettings* mdblist,
+                                     AuthConfig cfg, TokenProvider token,
+                                     int profileId,
                                      QObject* parent = nullptr);
     ~ProviderCredsController() override;
 
@@ -61,6 +68,7 @@ private:
 
     settings::AppSettings* m_settings = nullptr;
     tmdb::TmdbSettings* m_tmdb = nullptr;
+    mdblist::MdbListSettings* m_mdbList = nullptr;
     AuthConfig m_cfg;
     TokenProvider m_token;
     SyncRpcClient* m_client = nullptr;

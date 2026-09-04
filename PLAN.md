@@ -358,6 +358,40 @@ cutover (DEB/RPM/Flatpak/AppImage, portal helper, signing, AUR).
   cross-line `tmdb_settings` round-trip Compose↔Qt, key arrival via
   credential sync from a Compose-seeded server row.
 
+### A6 MDBList ✅ DONE 2026-09-03 (51/51 ctest, boot clean zero QML errors, smoke PASS vaapi)
+
+- **M1 settings.** `systems/mdblist`: 10 verbatim `mdblist_*` keys,
+  profile-scoped (`mdblist_settings` file, `..._<id>` keys),
+  enabled&&key gate (enable-without-key no-ops, blank-key disables),
+  per-id provider toggles (unknown ids ignored), present-only sync
+  envelopes + per-key merge apply (Qt debrid convention).
+- **M2 ratings service.** Provider table + fetch priority order
+  verbatim, `tt\d+` head extraction, movie/show mapping, rating POST
+  shape (`{"ids":[imdb],"provider":"imdb"}`), first-rating parse,
+  per-(media,id,key,providers) cache, parallel fan-out reordered to
+  priority, `NUVIO_MDBLIST_BASE` seam; live suite legs run through a
+  local stub (no network).
+- **M3 detail wiring (closes a P6 deferral).** MetaPage fetches per
+  meta identity when shown (hover-safe: visible-gated like autoplay)
+  and renders source-colored text chips in fork display order with
+  verbatim value formats (one-decimal/whole/percent); the MDBList
+  IMDb chip suppresses the Cinemeta ★ value (hasMdbImdbRating
+  parity). The fork's logo drawables are not ported (text chips are
+  the honest adaptation).
+- **M4 sync + creds + UI.** `mdblist_settings` OWNED (was
+  passthrough): orchestrator apply/export with the key stripped at
+  assembly + T11 suite leg; the key rides credentials (provider
+  `mdblist`, 4-row seed/push/merge coverage); `mdblist` +
+  `mdblistService` context props + 17th fan-out target;
+  `SettingsMdbListPage` leaf (fork strings verbatim) + root entry.
+- Gotcha (session-proven): when pure parse tests pass but live rows
+  come back empty, count the STUB's bytes first — this one shipped a
+  27-byte body with a 28-byte Content-Length (missing final `}`,
+  jsonerr=UnterminatedObject); print QJsonParseError, not just sizes.
+- TEST-LATER: live provider fan-out with a real key, chip rendering
+  on a real detail page, cross-line `mdblist_settings` round-trip
+  Compose↔Qt.
+
 ## Appendix B — Skip / incompatible (normative)
 
 - Direct `.kt`/Compose import: impossible by toolchain (re-express only).

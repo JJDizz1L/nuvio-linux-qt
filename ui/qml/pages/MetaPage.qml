@@ -97,8 +97,36 @@ Item {
         if (typeof heroController !== "undefined")
             heroController.enqueueCommand(["stop"])
     }
-    onVisibleChanged: visible ? maybeStartHero() : stopHero()
-    onCurChanged: { maybeStartHero(); maybeAutoPlayMovie() }
+    onVisibleChanged: {
+        if (visible) {
+            maybeStartHero()
+            maybeFetchRatings()
+        } else {
+            stopHero()
+        }
+    }
+    onCurChanged: {
+        maybeStartHero()
+        maybeAutoPlayMovie()
+        maybeFetchRatings()
+    }
+
+    // External ratings (MDBList parity): fetched per meta identity when
+    // the page is actually shown (hover previews mutate cur while
+    // hidden - same storm concern as autoplay). The service gates on
+    // its enabled&&key state and caches per key.
+    function maybeFetchRatings() {
+        if (!visible) return
+        if ((cur.id || "").length === 0) return
+        mdblistService.fetchRatings(type, imdbId)
+    }
+    // MDBList IMDb chip replaces the Cinemeta ★ value (fork
+    // hasMdbImdbRating parity - never show both).
+    readonly property bool hasMdbImdb: {
+        for (const r of mdblistService.ratings)
+            if (r.source === "imdb") return true
+        return false
+    }
     Component.onCompleted: maybeStartHero()
     Connections {
         target: trailer
@@ -201,11 +229,30 @@ Item {
             }
             Text {
                 text: [cur.releaseInfo || "", cur.runtime || "",
-                       cur.imdbRating ? "★ " + cur.imdbRating : ""]
+                       cur.imdbRating && !detail.hasMdbImdb
+                           ? "★ " + cur.imdbRating : ""]
                     .filter(function(s){ return String(s).length > 0 })
                     .join("   ·   ")
                 color: Theme.textSecondary
                 font.pixelSize: 13
+            }
+            // External ratings row (MDBList parity): source-colored
+            // chips in fork display order; the fork renders logo
+            // drawables, this line renders text (no rating-logo assets
+            // are ported).
+            Row {
+                visible: mdblistService.ratings.length > 0
+                spacing: 14
+                Repeater {
+                    model: mdblistService.ratings
+                    delegate: Text {
+                        required property var modelData
+                        text: modelData.label + " " + modelData.text
+                        color: modelData.color
+                        font.pixelSize: 13
+                        font.weight: Font.DemiBold
+                    }
+                }
             }
             Text {
                 visible: (cur.genres || []).length > 0

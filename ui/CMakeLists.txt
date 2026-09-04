@@ -37,6 +37,7 @@ qt_add_resources(nuvio_ui nuvio_qml
         qml/pages/SettingsDebridPage.qml
         qml/pages/SettingsNotificationsPage.qml
         qml/pages/SettingsTmdbPage.qml
+        qml/pages/SettingsMdbListPage.qml
         qml/pages/CloudPage.qml
         qml/pages/DownloadsPage.qml
         qml/pages/SettingsIntegrationsPage.qml

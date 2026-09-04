@@ -14,6 +14,7 @@
 #include "nuvio/settings/SyncPlayerSettings.h"
 #include "nuvio/settings/PropertiesStore.h"
 #include "nuvio/debrid/DebridSettings.h"
+#include "nuvio/mdblist/MdbListSettings.h"
 #include "nuvio/notifications/ReleaseNotifications.h"
 #include "nuvio/tmdb/TmdbSettings.h"
 #include "nuvio/watching/ContinueWatchingPrefs.h"
@@ -170,6 +171,22 @@ void SyncOrchestrator::pullNow()
                     applied         = applied || tmdbTouched;
                 }
             }
+            // MDBList settings apply the same way (owned feature, same
+            // credential policy for its api key).
+            if (m_mdbList) {
+                const QJsonObject mdbList =
+                    features
+                        .value(
+                            QLatin1String(settings::BlobFeature::kMdbList))
+                        .toObject();
+                if (!mdbList.isEmpty()) {
+                    m_applyRemote = true;
+                    const bool mdbListTouched =
+                        m_mdbList->applySyncPayload(mdbList);
+                    m_applyRemote   = false;
+                    applied         = applied || mdbListTouched;
+                }
+            }
 
             if (player.isEmpty() && !applied) {
                 emit pullFinished(false);   // nothing we own yet
@@ -275,6 +292,14 @@ QJsonObject SyncOrchestrator::fullPushBlob()
         if (!tmdb.isEmpty())
             passthrough.insert(
                 QLatin1String(settings::BlobFeature::kTmdb), tmdb);
+    }
+    if (m_mdbList) {
+        // MDBList is OWNED now: same credential policy for its key.
+        QJsonObject mdbList = m_mdbList->exportSyncPayload();
+        mdbList.remove(QStringLiteral("mdblist_api_key"));
+        if (!mdbList.isEmpty())
+            passthrough.insert(
+                QLatin1String(settings::BlobFeature::kMdbList), mdbList);
     }
     return settings::buildPushBlob(player, passthrough);
 }

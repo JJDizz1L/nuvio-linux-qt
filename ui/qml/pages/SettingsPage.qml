@@ -63,6 +63,8 @@ Item {
                   hint: qsTr("Episode release alerts") },
                 { label: qsTr("TMDB"), route: "settings-tmdb",
                   hint: qsTr("Enrichment, API key, modules") },
+                { label: qsTr("MDBList"), route: "settings-mdblist",
+                  hint: qsTr("External ratings, providers") },
                 { label: qsTr("Downloads"), route: "downloads",
                   hint: qsTr("Offline files, active and completed") },
                 { label: qsTr("Integrations"),     route: "settings-integrations",

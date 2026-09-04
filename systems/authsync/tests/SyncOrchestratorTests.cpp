@@ -6,6 +6,7 @@
 
 #include <nuvio/debrid/DebridSettings.h>
 #include <nuvio/library/LibraryStore.h>
+#include <nuvio/mdblist/MdbListSettings.h>
 #include <nuvio/notifications/ReleaseNotifications.h>
 #include <nuvio/settings/AppSettings.h>
 #include <nuvio/tmdb/TmdbSettings.h>
@@ -474,6 +475,48 @@ int main(int argc, char** argv)
               "owned tmdb fragment pushed");
         CHECK(!features3.value(QStringLiteral("tmdb_settings")).toObject()
                    .contains(QStringLiteral("tmdb_api_key")),
+              "api key stripped from the pushed blob");
+    }
+
+    { // T11: owned mdblist fragment applies remotely; the key applies
+      // when present but never rides the push (credential policy).
+        auto envelope = [](const QString& type, const QJsonValue& value) {
+            return QJsonObject{{QLatin1String("type"), type},
+                               {QLatin1String("value"), value}};
+        };
+        QJsonObject mdbFragment;
+        mdbFragment.insert(QStringLiteral("mdblist_use_mal"),
+                           envelope("boolean", false));
+        mdbFragment.insert(QStringLiteral("mdblist_api_key"),
+                           envelope("string", "should-not-push"));
+        QJsonObject mdbFeatures;
+        mdbFeatures.insert(QStringLiteral("player_settings"), QJsonObject{});
+        mdbFeatures.insert(QStringLiteral("mdblist_settings"), mdbFragment);
+        QJsonObject blob;
+        blob.insert(QStringLiteral("version"), 3);
+        blob.insert(QStringLiteral("features"), mdbFeatures);
+        rpc.setBlobReply(
+            QJsonDocument(blob).toJson(QJsonDocument::Compact));
+        nuvio::mdblist::MdbListSettings mdblist;
+        orch.setMdbListSettings(&mdblist);
+        orch.pullNow();
+        pump(200);
+        CHECK(!mdblist.isProviderEnabled("mal"), "mdblist fragment applied");
+        CHECK(mdblist.apiKey() == "should-not-push",
+              "key accepted on apply (stored, never pushed)");
+        settings.setPreferredAudioLanguage(QStringLiteral("es"));
+        pump(200);
+        const auto features4 =
+            QJsonDocument::fromJson(rpc.bodies.last()).object()
+                .value(QStringLiteral("p_settings_json")).toObject()
+                .value(QStringLiteral("features")).toObject();
+        CHECK(features4.value(QStringLiteral("mdblist_settings")).toObject()
+                          .value(QStringLiteral("mdblist_use_mal"))
+                          .toObject()
+                          .value(QStringLiteral("value")).toBool() == false,
+              "owned mdblist fragment pushed");
+        CHECK(!features4.value(QStringLiteral("mdblist_settings")).toObject()
+                   .contains(QStringLiteral("mdblist_api_key")),
               "api key stripped from the pushed blob");
     }
 

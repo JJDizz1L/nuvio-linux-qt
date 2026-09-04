@@ -50,6 +50,10 @@ namespace nuvio::tmdb {
 class TmdbSettings;
 }
 
+namespace nuvio::mdblist {
+class MdbListSettings;
+}
+
 namespace nuvio::watching {
 class WatchRecorder;
 }
@@ -98,6 +102,12 @@ public:
     /// TMDB settings source for the blob's tmdb_settings feature
     /// (optional; absent keeps the passthrough shape).
     void setTmdbSettings(tmdb::TmdbSettings* tmdb) { m_tmdb = tmdb; }
+    /// MDBList settings source for the blob's mdblist_settings feature
+    /// (optional; absent keeps the passthrough shape).
+    void setMdbListSettings(mdblist::MdbListSettings* mdblist)
+    {
+        m_mdbList = mdblist;
+    }
 
     /// One guarded async pull; harmless no-op when signed out/busy.
     void pullNow();
@@ -124,6 +134,7 @@ private:
     debrid::DebridSettings* m_debrid = nullptr;
     notifications::ReleaseNotificationManager* m_notifications = nullptr;
     tmdb::TmdbSettings* m_tmdb = nullptr;
+    mdblist::MdbListSettings* m_mdbList = nullptr;
     AuthConfig m_cfg;
     TokenProvider m_token;
     SyncRpcClient* m_client = nullptr;

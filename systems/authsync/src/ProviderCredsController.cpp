@@ -3,6 +3,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 
+#include "nuvio/mdblist/MdbListSettings.h"
 #include "nuvio/settings/AppSettings.h"
 #include "nuvio/settings/PropertiesStore.h"
 #include "nuvio/settings/SyncIdentity.h"
@@ -14,16 +15,19 @@ namespace {
 constexpr const char* kAnimeSkip = "animeskip";
 constexpr const char* kIntroDb = "introdb";
 constexpr const char* kTmdb = "tmdb";
+constexpr const char* kMdbList = "mdblist";
 constexpr const char* kClientIdField = "client_id";
 constexpr const char* kApiKeyField = "api_key";
 } // namespace
 
 ProviderCredsController::ProviderCredsController(
-    settings::AppSettings* settings, tmdb::TmdbSettings* tmdb, AuthConfig cfg,
-    TokenProvider token, int profileId, QObject* parent)
+    settings::AppSettings* settings, tmdb::TmdbSettings* tmdb,
+    mdblist::MdbListSettings* mdblist, AuthConfig cfg, TokenProvider token,
+    int profileId, QObject* parent)
     : QObject(parent),
       m_settings(settings),
       m_tmdb(tmdb),
+      m_mdbList(mdblist),
       m_cfg(std::move(cfg)),
       m_token(std::move(token)),
       m_client(new SyncRpcClient(m_cfg, [this] { return m_token(); }, this)),
@@ -52,6 +56,7 @@ QJsonObject ProviderCredsController::localSnapshot() const
          m_settings->animeSkipClientId().trimmed()},
         {QLatin1String(kIntroDb), m_settings->introDbApiKey().trimmed()},
         {QLatin1String(kTmdb), m_tmdb->apiKey().trimmed()},
+        {QLatin1String(kMdbList), m_mdbList->apiKey().trimmed()},
     };
 }
 
@@ -88,6 +93,15 @@ void ProviderCredsController::pushSnapshot(const QJsonObject& snapshot)
                     snapshot.value(QLatin1String(kTmdb)).toString());
         creds.append(QJsonObject{
             {QStringLiteral("provider"), QLatin1String(kTmdb)},
+            {QStringLiteral("credential_json"), json},
+        });
+    }
+    {
+        QJsonObject json;
+        json.insert(QLatin1String(kApiKeyField),
+                    snapshot.value(QLatin1String(kMdbList)).toString());
+        creds.append(QJsonObject{
+            {QStringLiteral("provider"), QLatin1String(kMdbList)},
             {QStringLiteral("credential_json"), json},
         });
     }
@@ -160,6 +174,9 @@ void ProviderCredsController::syncNow()
                                 .isEmpty() ||
                            !local.value(QLatin1String(kTmdb))
                                 .toString()
+                                .isEmpty() ||
+                           !local.value(QLatin1String(kMdbList))
+                                .toString()
                                 .isEmpty();
                        if (serverEmpty && localHasValues) {
                            // Seed: same payload shape, seed RPC semantics.
@@ -183,7 +200,8 @@ void ProviderCredsController::syncNow()
                            for (const QString& provider :
                                 {QLatin1String(kAnimeSkip),
                                  QLatin1String(kIntroDb),
-                                 QLatin1String(kTmdb)}) {
+                                 QLatin1String(kTmdb),
+                                 QLatin1String(kMdbList)}) {
                                QJsonObject json;
                                json.insert(
                                    provider == QLatin1String(kAnimeSkip)
@@ -233,6 +251,14 @@ void ProviderCredsController::syncNow()
                                      .trimmed()
                                : local.value(QLatin1String(kTmdb))
                                      .toString();
+                       const QString remoteMdbList =
+                           rows.contains(QLatin1String(kMdbList))
+                               ? rows.value(QLatin1String(kMdbList))
+                                     .value(QLatin1String(kApiKeyField))
+                                     .toString()
+                                     .trimmed()
+                               : local.value(QLatin1String(kMdbList))
+                                     .toString();
                        if (remoteAnime !=
                            local.value(QLatin1String(kAnimeSkip)).toString()) {
                            m_settings->setAnimeSkipClientId(remoteAnime);
@@ -248,10 +274,16 @@ void ProviderCredsController::syncNow()
                            m_tmdb->setApiKey(remoteTmdb);
                            applied = true;
                        }
+                       if (remoteMdbList !=
+                           local.value(QLatin1String(kMdbList)).toString()) {
+                           m_mdbList->setApiKey(remoteMdbList);
+                           applied = true;
+                       }
                        QJsonObject merged = local;
                        merged.insert(QLatin1String(kAnimeSkip), remoteAnime);
                        merged.insert(QLatin1String(kIntroDb), remoteIntro);
                        merged.insert(QLatin1String(kTmdb), remoteTmdb);
+                       merged.insert(QLatin1String(kMdbList), remoteMdbList);
                        m_baseline = merged;
                        m_hasBaseline = true;
                        emit syncFinished(true, applied);
