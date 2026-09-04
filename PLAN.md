@@ -211,9 +211,7 @@ backends yet (P3+ with their features).
   trakt.tv/activate, simkl.com/pin), live scrobble round-trip,
   credential vault round-trip on the Tier-1 pattern.
 
-Remaining, in suggested order: Downloads manager; episode-release
-notifications; TMDB service + settings; MDBList; membership/supporter;
-home-catalog settings sync;
+Remaining, in suggested order:
 in-app updater; deeplink (`nuvio://`/`stremio://`); Sentry; packaging
 cutover (DEB/RPM/Flatpak/AppImage, portal helper, signing, AUR).
 
@@ -487,3 +485,37 @@ cutover (DEB/RPM/Flatpak/AppImage, portal helper, signing, AUR).
 - Contract divergences by design: `vaapi`/`nvdec` pins → `auto`;
   `theme_dark` Qt-local (no Compose bool); unowned blob keys omitted, never
   `{}`/`""`; profile ids server-validated 1–6.
+
+### A9 Home-catalog settings sync ✅ DONE 2026-09-04 (59/59 ctest, boot clean zero QML errors, smoke PASS vaapi-copy)
+
+- **Transport.** New `HomeCatalogSyncController` (standalone RPC pair
+  `sync_pull_home_catalog_settings` / `sync_push_home_catalog_settings`,
+  platform `home_catalog_shared` — deliberately NOT a settings-blob
+  feature, matching the fork's separate `HomeCatalogSettingsSyncService`).
+  500 ms debounce, push gated on the initial pull completing for the
+  current (userId, profileId) token (profile switch re-gates
+  automatically), remote-apply guard, origin client id, merged push
+  (cached remote + local-wins).
+- **Codec.** New `systems/library` `HomeCatalogSync` pure layer:
+  `SyncCatalogItem` / `SyncHomeCatalogPayload` (snake_case,
+  encodeDefaults), `mergeSyncJson`, `preferenceKeyFor`,
+  `requiresExplicitSyncKey` (>2 colons, non-collection),
+  `addonIdForSyncKey` (suffix-strip so colon-bearing manifest ids
+  survive), `decomposeLegacyKey` split fallback, missing-flag
+  local-default preservation.
+- **Store surface.** `HomeShelves::exportSyncPayload` (live definitions
+  supply addonId/type/catalogId, legacy split covers the rest;
+  collection_/explicit foreign keys round-trip) +
+  `applySyncedPayload` (flags always; empty item list keeps local order;
+  non-empty replaces with local `heroSourceEnabled` preserved per key
+  and live-definition/explicit keys surviving omission). Hero flags
+  never cross the wire (local-only both directions, fork parity).
+- **Wiring.** main.cpp constructs the controller (token + userId
+  providers), `prefsChanged → onLocalCatalogChanged` (covers every
+  fork triggerPush call site), auth-gated initial pull, profile
+  retarget. No UI changes (shelves + Homescreen page already existed).
+- Divergence noted: the fork's normalize caps hero sources at 2 on
+  load/apply paths; our reconcile never enforces the cap (pre-existing
+  P4 gap, unchanged by this phase).
+- TEST-LATER: pull/push round-trip against the live endpoint (needs a
+  signed-in account), cross-device shelf-order convergence.

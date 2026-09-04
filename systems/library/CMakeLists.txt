@@ -6,6 +6,7 @@ add_library(nuvio_library STATIC
     include/nuvio/library/AddonStore.h     src/AddonStore.cpp
     include/nuvio/library/AddonRegistry.h  src/AddonRegistry.cpp
     include/nuvio/library/HomeCatalogSettings.h src/HomeCatalogSettings.cpp
+    include/nuvio/library/HomeCatalogSync.h src/HomeCatalogSync.cpp
     include/nuvio/library/HomeShelves.h    src/HomeShelves.cpp
     include/nuvio/library/LibraryStore.h   src/LibraryStore.cpp
     include/nuvio/library/LibrarySyncCodec.h src/LibrarySyncCodec.cpp

@@ -21,6 +21,7 @@
 #include <nuvio/settings/ActiveProfile.h>
 
 #include "nuvio/library/HomeCatalogSettings.h"
+#include "nuvio/library/HomeCatalogSync.h"
 
 namespace nuvio::library {
 
@@ -72,6 +73,18 @@ public:
     Q_INVOKABLE void setShelfCustomTitle(const QString& key,
                                          const QString& title);
     Q_INVOKABLE void moveShelf(const QString& key, int delta);
+
+    /// Sync surface (Appendix A): exportToSyncPayload parity - flags plus
+    /// one item per stored row (live definitions supply
+    /// addonId/type/catalogId, legacy split covers the rest; hero flags
+    /// are local-only and never cross the wire).
+    [[nodiscard]] SyncHomeCatalogPayload exportSyncPayload() const;
+    /// applyFromRemote parity: flags always apply; a non-empty item list
+    /// replaces prefs (local heroSourceEnabled preserved per key, stored
+    /// rows for live definitions or explicit sync keys survive when the
+    /// remote omits them). Persists + recomputes. Returns whether the
+    /// stored payload changed.
+    bool applySyncedPayload(const SyncHomeCatalogPayload& remote);
 
 signals:
     void sectionsChanged();

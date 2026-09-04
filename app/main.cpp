@@ -28,6 +28,7 @@
 #include "nuvio/mpv/TrackAutoSelector.h"
 #include "nuvio/authsync/AddonsSyncController.h"
 #include "nuvio/authsync/CollectionSyncController.h"
+#include "nuvio/authsync/HomeCatalogSyncController.h"
 #include "nuvio/authsync/LibrarySyncController.h"
 #include "nuvio/authsync/ProviderCredsController.h"
 #include "nuvio/debrid/CloudLibrary.h"
@@ -594,9 +595,30 @@ int main(int argc, char* argv[])
         [cs = collectionSync.get(), ap = auth.get()] {
             if (cs && ap->sessionActive()) cs->pullNow();
         });
+    // Home-catalog settings (Appendix A): standalone pull/push against
+    // the shared platform (NOT the settings blob); local edits ride
+    // prefsChanged like the fork's triggerPush call sites.
+    auto homeCatalogSync =
+        std::make_unique<nuvio::authsync::HomeCatalogSyncController>(
+            nuvio::authsync::AuthConfig::load(),
+            [ap = auth.get()] { return ap->accessToken(); },
+            [ap = auth.get()] { return ap->userId(); },
+            homeShelves.get(), nuvio::settings::ActiveProfile::id());
+    QObject::connect(homeShelves.get(),
+                     &nuvio::library::HomeShelves::prefsChanged,
+                     homeCatalogSync.get(),
+                     &nuvio::authsync::HomeCatalogSyncController::
+                         onLocalCatalogChanged);
+    QObject::connect(
+        auth.get(), &nuvio::authsync::AuthService::stateChanged,
+        auth.get(),
+        [hs = homeCatalogSync.get(), ap = auth.get()] {
+            if (hs && ap->sessionActive()) hs->pullNow();
+        });
     if (auth->sessionActive()) {
         librarySync->fullLibrarySyncThenDeltas();
         collectionSync->pullNow();
+        homeCatalogSync->pullNow();
     }
     // Episode-release alerts (A4): tracked shows reconcile against the
     // library above; refresh fires at startup like the fork's
@@ -835,6 +857,7 @@ int main(int argc, char* argv[])
             progressSync->setProfileId(index);
             librarySync->setProfileId(index);
             collectionSync->setProfileId(index);
+            homeCatalogSync->setProfileId(index);
             addonsSync->setProfileId(index);
             credsSync->setProfileId(index);
             debridAuth->setProfileId(index);

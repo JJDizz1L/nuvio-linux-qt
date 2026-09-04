@@ -395,4 +395,87 @@ void HomeShelves::moveShelf(const QString& key, int delta)
     emit prefsChanged();
 }
 
+SyncHomeCatalogPayload HomeShelves::exportSyncPayload() const
+{
+    HomeCatalogPayload payload = m_store.load();
+    SyncHomeCatalogPayload out;
+    out.showCatalogType = payload.showCatalogType;
+    out.hideUnreleasedContent = payload.hideUnreleasedContent;
+    QList<HomeShelfPref> rows = payload.items;
+    std::stable_sort(rows.begin(), rows.end(),
+                     [](const HomeShelfPref& a, const HomeShelfPref& b) {
+                         return a.order < b.order;
+                     });
+    for (const HomeShelfPref& row : rows) {
+        SyncCatalogItem item;
+        const auto defIt = m_defs.find(row.key);
+        if (defIt != m_defs.end()) {
+            item.addonId = addonIdForSyncKey(defIt->key, defIt->type,
+                                             defIt->catalogId);
+            item.type = defIt->type;
+            item.catalogId = defIt->catalogId;
+        } else if (row.key.startsWith(QLatin1String("collection_"))) {
+            item.isCollection = true;
+            item.collectionId =
+                row.key.mid(QStringLiteral("collection_").size());
+        } else {
+            const DecomposedKey parts = decomposeLegacyKey(row.key);
+            item.addonId = parts.addonId;
+            item.type = parts.type;
+            item.catalogId = parts.catalogId;
+        }
+        item.enabled = row.enabled;
+        item.order = row.order;
+        item.customTitle = row.customTitle;
+        item.key = row.key;
+        out.items.append(item);
+    }
+    return out;
+}
+
+bool HomeShelves::applySyncedPayload(const SyncHomeCatalogPayload& remote)
+{
+    HomeCatalogPayload before = m_store.load();
+    const QString beforeJson = HomeCatalogSettingsCodec::encode(before);
+    HomeCatalogPayload payload = before;
+    payload.showCatalogType = remote.showCatalogType;
+    payload.hideUnreleasedContent = remote.hideUnreleasedContent;
+    if (!remote.items.isEmpty()) {
+        QHash<QString, bool> existingHero;
+        for (const HomeShelfPref& p : before.items)
+            existingHero.insert(p.key, p.heroSourceEnabled);
+        QHash<QString, HomeShelfPref> remoteRows;
+        QStringList remoteOrder;
+        for (const SyncCatalogItem& item : remote.items) {
+            const QString key = preferenceKeyFor(item);
+            if (key.isEmpty() || remoteRows.contains(key)) continue;
+            HomeShelfPref p;
+            p.key = key;
+            p.customTitle = item.customTitle;
+            p.enabled = item.enabled;
+            p.heroSourceEnabled = existingHero.value(key, true);
+            p.order = item.order;
+            remoteRows.insert(key, p);
+            remoteOrder.append(key);
+        }
+        QList<HomeShelfPref> merged;
+        for (const HomeShelfPref& p : before.items) {
+            if (remoteRows.contains(p.key)) continue;
+            if (m_defs.contains(p.key) || requiresExplicitSyncKey(p.key))
+                merged.append(p);
+        }
+        for (const QString& key : remoteOrder) merged.append(remoteRows[key]);
+        payload.items = merged;
+    }
+    m_store.save(payload);
+    m_payload = payload;
+    rebuildDefinitions();
+    recompute();
+    emit prefsChanged();
+    // Compare what the remote merge wrote, not the post-reconcile view
+    // (reconcile may append rows for newly installed addons - local
+    // definition churn, not a remote change).
+    return beforeJson != HomeCatalogSettingsCodec::encode(payload);
+}
+
 } // namespace nuvio::library
