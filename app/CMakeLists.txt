@@ -19,6 +19,7 @@ target_link_libraries(nuvio-linux-qt PRIVATE
     nuvio::playback nuvio::library nuvio::authsync nuvio::profiles
     nuvio::debrid nuvio::downloads nuvio::notifications nuvio::tmdb
     nuvio::mdblist nuvio::membership nuvio::plugins nuvio::updater
+    nuvio::deeplink
     nuvio::tracking  nuvio::integrations nuvio::settings nuvio::trailer
     nuvio::watching)   # watch-state foundation (resume/watched recorder)
 

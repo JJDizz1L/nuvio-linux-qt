@@ -205,6 +205,14 @@ ApplicationWindow {
             toastTimer.restart()
         }
     }
+    Connections {
+        target: deeplink
+        function onNotice(message) {
+            toastText.text = message
+            toast.opacity = 1
+            toastTimer.restart()
+        }
+    }
     Rectangle {
         id: updateBanner
         z: 60

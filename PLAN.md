@@ -212,7 +212,7 @@ backends yet (P3+ with their features).
   credential vault round-trip on the Tier-1 pattern.
 
 Remaining, in suggested order:
-deeplink (`nuvio://`/`stremio://`); Sentry; packaging
+Sentry; packaging
 cutover (DEB/RPM/Flatpak/AppImage, portal helper, signing, AUR).
 
 ### A2 Debrid ✅ DONE 2026-09-03 (47/47 ctest, boot clean, smoke PASS vaapi-copy)
@@ -555,3 +555,26 @@ cutover (DEB/RPM/Flatpak/AppImage, portal helper, signing, AUR).
   five orphans had to be SIGKILLed).
 - TEST-LATER: live feed check once Qt releases exist, real .deb
   download→install handoff on a packaged build.
+
+### A11 Deeplinks ✅ DONE 2026-09-04 (61/61 ctest, boot clean zero QML errors, smoke PASS vaapi-copy)
+
+- **Kernel.** `systems/deeplink`: `parseDeepLink` verbatim port
+  (Meta/AddonInstall/Downloads, `auth` reserved-null, stremio
+  addon-host-only, provider + path + query-param meta forms, media-type
+  aliases, imdb:/tmdb: normalization, addon-host heuristics) +
+  `buildMetaUrl`/`buildDownloadsUrl`/`isAppUrl`. All eight upstream
+  parser cases pinned plus builder round-trips and edge forms.
+- **Router.** `DeepLinkRouter::handleUrl` (trim, blank/scheme guard,
+  one signal per link) wired in main.cpp: Meta → `meta.load` +
+  push "meta" (title resolves async, every other entry's pattern),
+  AddonInstall → push "addons" + registry add (result rides the page
+  status + shell-toast "Checking addon…"), Downloads → push
+  "downloads". CLI argv filtered case-insensitively (launch-args
+  parity); boot with link args verified error-free.
+- **Out of scope (packaging cutover).** OS scheme registration
+  (.desktop `MimeType=x-scheme-handler`), live single-instance
+  forwarding (second launch is a second process until then), macOS
+  open-URI handler (no Qt/Linux equivalent). Tracking auth callbacks
+  are a no-op set here (device-code/PIN flows, no browser leg).
+- TEST-LATER: end-to-end link tap from a browser once scheme
+  registration lands, addon-install link against a live manifest.

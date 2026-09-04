@@ -43,6 +43,8 @@
 #include "nuvio/membership/MembershipOverview.h"
 #include "nuvio/notifications/ReleaseNotifications.h"
 #include "nuvio/plugins/PluginRepository.h"
+#include "nuvio/deeplink/DeepLink.h"
+#include "nuvio/deeplink/DeepLinkRouter.h"
 #include "nuvio/updater/AppUpdater.h"
 #include "nuvio/tmdb/TmdbService.h"
 #include "nuvio/tmdb/TmdbSettings.h"
@@ -968,6 +970,41 @@ int main(int argc, char* argv[])
     } else {
         QMetaObject::invokeMethod(root, "setSmokeActive",
                                   Q_ARG(QVariant, false));
+    }
+
+    // App deeplinks (Appendix A): nuvio:// + stremio:// argv land here
+    // (handleDesktopLaunchArgs parity; scheme registration + live
+    // single-instance forwarding ride the packaging cutover). Meta opens
+    // the detail page (title resolves async like every other entry),
+    // addon urls install through the registry, downloads opens the page.
+    auto deeplink = std::make_unique<nuvio::deeplink::DeepLinkRouter>();
+    engine.rootContext()->setContextProperty(
+        QStringLiteral("deeplink"),
+        QVariant::fromValue<QObject*>(deeplink.get()));
+    QObject::connect(
+        deeplink.get(), &nuvio::deeplink::DeepLinkRouter::openMeta,
+        &app,
+        [ms = metaSvc.get(), nav = navigation.get()](const QString& type,
+                                                     const QString& id) {
+            if (ms && nav) {
+                ms->load(type, id);
+                nav->push(QStringLiteral("meta"));
+            }
+        });
+    QObject::connect(
+        deeplink.get(), &nuvio::deeplink::DeepLinkRouter::installAddon,
+        &app,
+        [ar = addonreg.get(), nav = navigation.get()](const QString& url) {
+            if (nav) nav->push(QStringLiteral("addons"));
+            if (ar) ar->add(url);
+        });
+    QObject::connect(
+        deeplink.get(), &nuvio::deeplink::DeepLinkRouter::openDownloads,
+        &app, [nav = navigation.get()] {
+            if (nav) nav->push(QStringLiteral("downloads"));
+        });
+    for (const QString& arg : QCoreApplication::arguments().mid(1)) {
+        if (nuvio::deeplink::isAppUrl(arg)) deeplink->handleUrl(arg);
     }
 
     const int rc = app.exec();
