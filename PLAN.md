@@ -213,7 +213,7 @@ backends yet (P3+ with their features).
 
 Remaining, in suggested order: Downloads manager; episode-release
 notifications; TMDB service + settings; MDBList; membership/supporter;
-plugins runtime (QuickJS/WASM/DOM/crypto); home-catalog settings sync;
+home-catalog settings sync;
 in-app updater; deeplink (`nuvio://`/`stremio://`); Sentry; packaging
 cutover (DEB/RPM/Flatpak/AppImage, portal helper, signing, AUR).
 
@@ -424,6 +424,58 @@ cutover (DEB/RPM/Flatpak/AppImage, portal helper, signing, AUR).
 - TEST-LATER: live RPC round-trip with a real supporter account
   (tier + entitlements land, card states render), wall fetch against
   the live endpoint, cross-account cache isolation on one machine.
+
+### A8 Plugins runtime ✅ DONE 2026-09-04 (58/58 ctest, boot clean zero QML errors, smoke PASS vaapi-copy)
+
+- **Engine.** `third_party/quickjs` (Bellard 2024-01-13, MIT, same
+  lineage as the fork's libquickjs; pinned — quickjs-ng is a
+  different fork) + `JsEngine` RAII wrapper (eval, typed native
+  globals, JSON, promise-job pumping, deadline interrupt). Needed
+  `LANGUAGES C CXX` at root + `-DCONFIG_VERSION` (upstream Makefile
+  parity).
+- **Polyfill (verbatim data).** `resources/polyfill.js` extracted from
+  the fork's JsBindings (fetch/Abort/base64/URL/CryptoJS+subtle/
+  TextEncoder/cheerio/require/Array/Object/String) with only the two
+  JSON injection slots changed; loader substitutes them at setup.
+- **Crypto bridge.** Digests/HMAC via Qt, PBKDF2 verbatim port,
+  AES-128/192/256 CBC/ECB via triple-built tiny-AES-c (public
+  domain; one-size-per-build forces aes128/192/256.c symbol views),
+  hand-rolled GCM-128 (byte-identical to Node on the all-zero
+  vectors), RSA/ECDSA-SHA256 via optional OpenSSL (honest errors
+  without it). Pinned by RFC/NIST vectors throughout.
+- **DOM bridge.** Vendored Gumbo (Apache 2.0) + hand selector engine
+  (tag/class/id/attr/descendant/child/comma/:contains) with jsoup
+  text/attr/html semantics incl. the empty-attr-undefined quirk.
+- **Fetch/URL/console + runtime.** Async promise fetch (UA default,
+  redirect toggle, 8KB header truncation, ok:false envelopes),
+  QUrl parsing, console capture; `PluginRuntime` executes scrapers on
+  worker threads (60s budget) with verbatim result parsing.
+- **Repository + streams tier + UI.** Manifest rules verbatim,
+  platform tags `{desktop,qt,<os>}` (the fork's `jvm` tag is not
+  claimed — honest skip), per-profile state + code cache + global
+  scraper settings, server pull (table SELECT) / push (RPC) with the
+  empty-server seeds-local rule, width-4 parallel execution fan-out,
+  session plugin tier (after addon-direct, before torrent, pending-key
+  guarded, never cached), `SettingsPluginsPage` (repos, providers,
+  test runs, settings dialogs) + root entry, `plugins` prop + 18th
+  fan-out target.
+- Gotchas (all session-proven, all first-caught by the suites):
+  remember hex ONLY from authoritative sources (my memorized AES/SHA
+  vectors were wrong multiple times — OpenSSL/Node over memory,
+  always); Gumbo string pieces point into the source buffer (keep it
+  alive per doc); element ids mint fresh per call (compare by
+  content); `const auto` mutable lambdas can't call their own
+  operator(); QML needs Q_INVOKABLE wrappers (std::function never
+  crosses); no-op-looking edits eat newlines (anchor multi-line).
+- Divergences with reasons: WASM stays a placeholder like upstream
+  (the fork's WasmBridge registers nothing); execution waves capped
+  at 4 threads (fork uncapped — merged rows identical, latency only);
+  no per-scraper group display in StreamsPanel (group flag persists
+  for a later panel pass); donation progress absent per desktop
+  policy; rating logos render as text chips (no drawable assets).
+- TEST-LATER: real repository install + scraper run against a live
+  manifest, plugin-URL playback end-to-end, cross-line plugin state
+  read (Compose-written rows resolve here).
 
 ## Appendix B — Skip / incompatible (normative)
 

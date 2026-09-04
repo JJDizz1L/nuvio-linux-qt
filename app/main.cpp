@@ -41,6 +41,7 @@
 #include "nuvio/membership/MemberAccess.h"
 #include "nuvio/membership/MembershipOverview.h"
 #include "nuvio/notifications/ReleaseNotifications.h"
+#include "nuvio/plugins/PluginRepository.h"
 #include "nuvio/tmdb/TmdbService.h"
 #include "nuvio/tmdb/TmdbSettings.h"
 #include "nuvio/authsync/ProgressSyncController.h"
@@ -670,6 +671,46 @@ int main(int argc, char* argv[])
     engine.rootContext()->setContextProperty(
         QStringLiteral("mdblistService"), QVariant::fromValue<QObject*>(
                                               mdbListService.get()));
+    // Plugin scrapers (A8): full runtime (QuickJS + bridges). The
+    // session consults enabled scrapers after addon-direct misses;
+    // pull on session activation like the library leg.
+    auto pluginRepo =
+        std::make_unique<nuvio::plugins::PluginRepository>(
+            auth.get(), tmdbService.get());
+    playbackSession->setPluginExecutor(
+        [pr = pluginRepo.get()](
+            const QString& type, const QString& contentId, int season,
+            int episode,
+            nuvio::playback::PlaybackSession::PluginRowsCallback done) {
+            pr->executeFor(
+                type, contentId, season, episode,
+                [done = std::move(done)](
+                    const QList<nuvio::plugins::PluginStreamResult>& rows) {
+                    QVariantList out;
+                    for (const auto& r : rows) {
+                        out.append(QVariantMap{
+                            {QStringLiteral("url"), r.url},
+                            {QStringLiteral("title"), r.title},
+                            {QStringLiteral("source"),
+                             r.provider.isEmpty()
+                                 ? QStringLiteral("Plugin")
+                                 : r.provider},
+                        });
+                    }
+                    done(out);
+                });
+        });
+    engine.rootContext()->setContextProperty(
+        QStringLiteral("plugins"), QVariant::fromValue<QObject*>(
+                                       pluginRepo.get()));
+    QObject::connect(
+        auth.get(), &nuvio::authsync::AuthService::stateChanged,
+        auth.get(),
+        [pr = pluginRepo.get(), ap = auth.get()] {
+            if (pr && ap->sessionActive()) pr->pullFromServer();
+        });
+    if (auth->sessionActive()) pluginRepo->pullFromServer();
+    pluginRepo->initialize();
     // Provider credentials (T4): the Qt-owned API keys through
     // the credential family (the settings blob strips them by policy).
     auto credsSync =
@@ -801,6 +842,7 @@ int main(int argc, char* argv[])
             releaseNotifications->setProfileId(index);
             tmdbSettings->setProfileId(index);
             mdbListSettings->setProfileId(index);
+            pluginRepo->setProfileId(index);
         });
     QObject::connect(
         auth.get(), &nuvio::authsync::AuthService::stateChanged,

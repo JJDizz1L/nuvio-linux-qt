@@ -15,7 +15,7 @@ cmake_minimum_required(VERSION 3.16)
 project(NuvioLinuxQt
         VERSION 0.1.20.0
         DESCRIPTION "Nuvio Linux media player (Qt Quick exploration line)"
-        LANGUAGES CXX)
+        LANGUAGES C CXX)   # C for vendored QuickJS (third_party/quickjs)
 
 set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake" ${CMAKE_MODULE_PATH})
 include(NuvioCompilerSettings)
@@ -52,6 +52,10 @@ message(STATUS "Nuvio Qt line: mpv linkage -> ${NUVIO_MPVPKG}")
 
 include(CTest)
 
+add_subdirectory(third_party/quickjs)   # vendored Bellard QuickJS (plugins)
+add_subdirectory(third_party/tiny-aes)  # public-domain AES core (plugins)
+add_subdirectory(third_party/gumbo)     # Apache HTML5 parser (plugins)
+
 # Order encodes layering; leaves (mpv, library, ...) may not reference ui/.
 add_subdirectory(systems/mpv)
 add_subdirectory(systems/p2p)
@@ -69,6 +73,7 @@ add_subdirectory(systems/notifications)   # episode-release alerts (A4)
 add_subdirectory(systems/tmdb)            # TMDB settings + id service (A5)
 add_subdirectory(systems/mdblist)         # MDBList ratings (A6)
 add_subdirectory(systems/membership)      # supporter access + community (A7)
+add_subdirectory(systems/plugins)         # plugin runtime QuickJS (A8)
 add_subdirectory(systems/tracking)
 add_subdirectory(systems/integrations)
 add_subdirectory(ui)

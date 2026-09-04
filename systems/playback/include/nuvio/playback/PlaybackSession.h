@@ -89,6 +89,19 @@ public:
     {
         m_localFileProvider = std::move(provider);
     }
+    /// Plugin scraper tier (A8): (mediaType, contentId, season, episode)
+    /// -> rows [{url,title,source}...]. Consulted once per intent after
+    /// addon-direct misses and before the torrent tier (fork
+    /// StreamsRepository parallel-source parity, serialized here: the
+    /// async completion rejoins through the pending-key guard).
+    using PluginRowsCallback =
+        std::function<void(const QVariantList& rows)>;
+    using PluginExecutor = std::function<void(
+        const QString&, const QString&, int, int, PluginRowsCallback)>;
+    void setPluginExecutor(PluginExecutor executor)
+    {
+        m_pluginExecutor = std::move(executor);
+    }
     /// Debrid unrestrict tier (D2, optional; null disables).
     void setDebridResolver(nuvio::debrid::DebridResolver* resolver);
 
@@ -126,6 +139,8 @@ private:
     nuvio::debrid::DebridResolver* m_debrid = nullptr;
     ReusePolicyProvider m_reuseProvider;
     LocalFileProvider m_localFileProvider;
+    PluginExecutor m_pluginExecutor;
+    QString m_pluginKey;   // "type/id" already offered to the plugin tier
     quint64 m_activeToken = 0;
     bool    m_awaitingP2p = false;
     bool    m_awaitingDebrid = false;

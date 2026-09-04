@@ -175,6 +175,50 @@ int main(int argc, char** argv)
               "provider miss resolves over the network");
     }
 
+    { // plugin tier: consulted once after addon-direct misses
+        PlaybackSession plugin(&r);
+        int execCalls = 0;
+        QString execContent;
+        plugin.setPluginExecutor(
+            [&](const QString& type, const QString& contentId, int season,
+                int episode, PlaybackSession::PluginRowsCallback done) {
+                ++execCalls;
+                execContent = contentId;
+                CHECK(type == "series" && season == 2 && episode == 3,
+                      "executor identity splits composite ids");
+                done(QVariantList{
+                    QVariantMap{{"url", "https://plug.example/e.mkv"},
+                                {"title", "Plug 1080p"},
+                                {"source", "plugin:x"}}});
+            });
+        Capture capPlugin;
+        capPlugin.attach(plugin);
+        r.applyAddonStreams("series/tt700:2:3", "alpha", bodyEmpty);
+        r.applyAddonStreams("series/tt700:2:3", "beta", bodyEmpty);
+        plugin.requestPlay("series", "tt700:2:3", "Show");
+        CHECK(execCalls == 1 && execContent == "tt700",
+              "plugin tier consulted with parent id");
+        CHECK(capPlugin.ready == 1 &&
+                  capPlugin.lastReadyUrl == "https://plug.example/e.mkv" &&
+                  capPlugin.lastReadyTitle == "Plug 1080p",
+              "plugin rows play (title preferred)");
+
+        // Empty plugin rows fall through to the torrent tier (here:
+        // torrent-only ingest exists but no engine is attached, so the
+        // honest negative still surfaces exactly once).
+        PlaybackSession pluginEmpty(&r);
+        pluginEmpty.setPluginExecutor(
+            [](const QString&, const QString&, int, int,
+               PlaybackSession::PluginRowsCallback done) {
+                done(QVariantList{});
+            });
+        Capture capEmpty;
+        capEmpty.attach(pluginEmpty);
+        pluginEmpty.requestPlay("movie", "tt300", "Tor Only");
+        CHECK(capEmpty.ready == 0 && capEmpty.unavail == 1,
+              "empty plugin rows fall through to unavailable");
+    }
+
     { // stale-guard: late completion of a superseded id is dropped
         const int readyB4 = cap.ready;
         session.requestPlay("movie", "tt400", "Old");   // in flight...

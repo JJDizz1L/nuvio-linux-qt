@@ -38,6 +38,7 @@ qt_add_resources(nuvio_ui nuvio_qml
         qml/pages/SettingsNotificationsPage.qml
         qml/pages/SettingsTmdbPage.qml
         qml/pages/SettingsMdbListPage.qml
+        qml/pages/SettingsPluginsPage.qml
         qml/pages/CommunityPage.qml
         qml/components/MembershipCard.qml
         qml/pages/CloudPage.qml

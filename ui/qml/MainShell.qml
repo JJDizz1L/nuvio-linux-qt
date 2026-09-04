@@ -97,6 +97,10 @@ ApplicationWindow {
         anchors.fill: parent
         visible: navigation.currentRoute === "settings-mdblist"
     }
+    Pages.SettingsPluginsPage {
+        anchors.fill: parent
+        visible: navigation.currentRoute === "settings-plugins"
+    }
     Pages.CommunityPage {
         anchors.fill: parent
         visible: navigation.currentRoute === "community"

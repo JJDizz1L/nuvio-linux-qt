@@ -116,6 +116,7 @@ void PlaybackSession::requestPlay(const QString& type, const QString& imdbId,
     m_pendingType  = type;
     m_pendingId    = imdbId;
     m_pendingTitle = title.isEmpty() ? imdbId : title;
+    m_pluginKey.clear();   // re-arm the plugin tier for the new intent
 
     // Offline-first tier (Compose MainAppContent parity): a completed
     // download plays from disk, skipping reuse cache + resolution. Local
@@ -203,6 +204,48 @@ void PlaybackSession::decide()
                       url, m_pendingType, m_pendingId, false);
         emit sessionChanged();
         emit playbackReady(m_title, m_url);
+        return;
+    }
+
+    // Plugin scraper tier (A8): consulted once per intent after
+    // addon-direct misses, before the torrent tier. Async: the
+    // completion rejoins through the pending-key guard below.
+    // Plugin urls never touch the reuse cache (fresh resolve per
+    // play; scraper links are short-lived by nature).
+    const QString pluginKey = m_pendingType + u'/' + m_pendingId;
+    if (m_pluginExecutor && m_pluginKey != pluginKey) {
+        m_pluginKey = pluginKey;
+        const CompositeId parts = splitCompositeId(m_pendingId);
+        const QString contentId =
+            parts.isEpisode() ? parts.parent : m_pendingId;
+        const QString type = m_pendingType;
+        const QString id = m_pendingId;
+        const QString title = m_pendingTitle;
+        m_pluginExecutor(type, contentId, parts.season, parts.episode,
+                         [this, type, id, title](const QVariantList& rows) {
+                             if (type != m_pendingType || id != m_pendingId)
+                                 return;   // superseded intent: drop
+                             for (const QVariant& entry : rows) {
+                                 const QVariantMap row = entry.toMap();
+                                 const QString rowUrl =
+                                     row.value(QStringLiteral("url"))
+                                         .toString();
+                                 if (rowUrl.isEmpty()) continue;
+                                 const QString rowTitle =
+                                     row.value(QStringLiteral("title"))
+                                         .toString();
+                                 acceptSession(
+                                     m_title, m_url, m_type, m_id, m_season,
+                                     m_episode, m_isRelay,
+                                     rowTitle.isEmpty() ? title : rowTitle,
+                                     rowUrl, type, id, false);
+                                 emit sessionChanged();
+                                 emit playbackReady(m_title, m_url);
+                                 return;
+                             }
+                             // No direct plugin rows: torrent tier next.
+                             decideTorrentTier();
+                         });
         return;
     }
 
