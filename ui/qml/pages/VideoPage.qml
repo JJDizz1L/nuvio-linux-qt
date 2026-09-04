@@ -17,6 +17,41 @@ Item {
     // meta binding: hover previews mutate meta.current mid-browse.
     property var episodeList: []
 
+    // Download outcome toast (A3): shell toast is out of reach here, so
+    // the page owns a small one (LibraryPage precedent).
+    function showDownloadToast(text) {
+        dlToastText.text = text
+        dlToast.opacity = 1
+        dlToastTimer.restart()
+    }
+    // Enqueues the resolved direct url of the live session (the Qt
+    // equivalent of the fork's per-stream download: this line has no
+    // manual stream picker, so the playing source is the addressable
+    // one; identity splits exactly like the shell's beginSession).
+    function downloadCurrentSource() {
+        if (!playback.hasSession || playback.currentIsLocalRelay) return
+        const parts = page.currentParts()
+        const isEpisode = parts.length === 3
+        const outcome = downloads.enqueue(
+            playback.currentType,
+            isEpisode ? parts[0] : playback.currentId,
+            playback.currentType,
+            playback.currentId,
+            playback.currentTitle, "",
+            isEpisode ? parseInt(parts[1], 10) : -1,
+            isEpisode ? parseInt(parts[2], 10) : -1,
+            "", playback.currentTitle, "", playback.currentUrl)
+        if (outcome === "Started")
+            page.showDownloadToast(qsTr("Download started"))
+        else if (outcome === "Replaced")
+            page.showDownloadToast(qsTr("Download restarted"))
+        else if (outcome === "UnsupportedFormat")
+            page.showDownloadToast(
+                qsTr("This source can't be downloaded (stream format)"))
+        else
+            page.showDownloadToast(qsTr("Download unavailable right now"))
+    }
+
     // Next-episode card state (per session key; countdown mirrors Compose's
     // 3-2-1 after selection when auto-play is on).
     QtObject {
@@ -636,6 +671,34 @@ Item {
             NumberAnimation { duration: Theme.fadeMs; easing.type: Easing.OutQuad }
         }
         onSourcesPressed: sourcesPanel.visible = !sourcesPanel.visible
+        onDownloadPressed: page.downloadCurrentSource()
+    }
+
+    Rectangle {
+        id: dlToast
+        opacity: 0
+        z: 40
+        radius: Theme.radiusMd
+        color: Theme.chromeScrim
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.bottom: bar.top
+        anchors.bottomMargin: 16
+        width: dlToastText.width + 32
+        height: dlToastText.height + 18
+        Text {
+            id: dlToastText
+            anchors.centerIn: parent
+            color: Theme.textPrimary
+            font.pixelSize: 13
+        }
+        Behavior on opacity {
+            NumberAnimation { duration: Theme.fadeMs }
+        }
+        Timer {
+            id: dlToastTimer
+            interval: 2600
+            onTriggered: dlToast.opacity = 0
+        }
     }
 
     // Streams scope panel (P3d): reads the resolver cache for the current

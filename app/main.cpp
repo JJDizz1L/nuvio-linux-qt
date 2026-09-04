@@ -34,6 +34,7 @@
 #include "nuvio/debrid/DebridAuth.h"
 #include "nuvio/debrid/DebridResolver.h"
 #include "nuvio/debrid/DebridSettings.h"
+#include "nuvio/downloads/DownloadManager.h"
 #include "nuvio/authsync/ProgressSyncController.h"
 #include "nuvio/authsync/AuthService.h"
 #include "nuvio/authsync/SyncOrchestrator.h"
@@ -628,6 +629,19 @@ int main(int argc, char* argv[])
     auto debridResolver =
         std::make_unique<nuvio::debrid::DebridResolver>(debridSettings.get());
     playbackSession->setDebridResolver(debridResolver.get());
+    // Offline downloads (A3): queue manager + offline-first playback.
+    // A completed download plays from disk, skipping every network
+    // tier (Compose MainAppContent + next-episode autoplay parity).
+    auto downloadManager =
+        std::make_unique<nuvio::downloads::DownloadManager>();
+    playbackSession->setLocalFileProvider(
+        [dm = downloadManager.get()](const QString& parent, int season,
+                                     int episode, const QString& videoId) {
+            return dm->playableLocalFile(parent, season, episode, videoId);
+        });
+    engine.rootContext()->setContextProperty(
+        QStringLiteral("downloads"), QVariant::fromValue<QObject*>(
+                                         downloadManager.get()));
     // Cloud library browser (D3): stored provider downloads.
     auto cloudLibrary =
         std::make_unique<nuvio::debrid::CloudLibrary>(debridSettings.get());
@@ -692,6 +706,7 @@ int main(int argc, char* argv[])
             addonsSync->setProfileId(index);
             credsSync->setProfileId(index);
             debridAuth->setProfileId(index);
+            downloadManager->setProfileId(index);
         });
     QObject::connect(
         auth.get(), &nuvio::authsync::AuthService::stateChanged,

@@ -79,6 +79,16 @@ public:
     {
         m_reuseProvider = std::move(provider);
     }
+    /// Offline-first tier (DL2): (parentMetaId, season, episode, videoId)
+    /// -> playable file:// uri, or empty when nothing is downloaded. When
+    /// set, a hit wins over every network tier (Compose MainAppContent
+    /// + next-episode autoplay parity: downloaded episodes play local).
+    using LocalFileProvider =
+        std::function<QString(const QString&, int, int, const QString&)>;
+    void setLocalFileProvider(LocalFileProvider provider)
+    {
+        m_localFileProvider = std::move(provider);
+    }
     /// Debrid unrestrict tier (D2, optional; null disables).
     void setDebridResolver(nuvio::debrid::DebridResolver* resolver);
 
@@ -115,6 +125,7 @@ private:
     nuvio::p2p::P2pEngine* m_p2p = nullptr;
     nuvio::debrid::DebridResolver* m_debrid = nullptr;
     ReusePolicyProvider m_reuseProvider;
+    LocalFileProvider m_localFileProvider;
     quint64 m_activeToken = 0;
     bool    m_awaitingP2p = false;
     bool    m_awaitingDebrid = false;

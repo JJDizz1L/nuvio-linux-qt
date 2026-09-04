@@ -156,6 +156,14 @@ Item {
             flat: true
             onClicked: navigation.push("cloud")
         }
+        Button {
+            anchors.verticalCenter: parent.verticalCenter
+            anchors.right: parent.right
+            anchors.rightMargin: 200
+            text: qsTr("Downloads")
+            flat: true
+            onClicked: navigation.push("downloads")
+        }
     }
 
     // ---- my library + collections + catalog rails ------------------------

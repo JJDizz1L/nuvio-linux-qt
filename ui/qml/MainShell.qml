@@ -89,6 +89,10 @@ ApplicationWindow {
         anchors.fill: parent
         visible: navigation.currentRoute === "cloud"
     }
+    Pages.DownloadsPage {
+        anchors.fill: parent
+        visible: navigation.currentRoute === "downloads"
+    }
     Pages.SettingsIntegrationsPage {
         anchors.fill: parent
         visible: navigation.currentRoute === "settings-integrations"

@@ -10,6 +10,8 @@ Rectangle {
 
     // VideoPage wires this to its streams panel.
     signal sourcesPressed()
+    // VideoPage wires this to the downloads enqueue of the live session.
+    signal downloadPressed()
 
     // Track lists derived from the mpv track-list (kind-filtered).
     readonly property var audioTracks: {
@@ -251,6 +253,23 @@ Rectangle {
                 verticalAlignment: Text.AlignVCenter
             }
             onClicked: Qt.openUrlExternally(playback.currentUrl)
+        }
+
+        // Offline download (A3): enqueues the resolved direct url of the
+        // live session (same gate as External - localhost P2P relays are
+        // transient and never downloadable). Outcome toasts in VideoPage.
+        Button {
+            flat: true
+            visible: bar.mpv.hasMedia && playback.hasSession
+                     && !playback.currentIsLocalRelay
+            contentItem: Text {
+                text: qsTr("Download")
+                color: Theme.textPrimary
+                font.pixelSize: 14
+                horizontalAlignment: Text.AlignHCenter
+                verticalAlignment: Text.AlignVCenter
+            }
+            onClicked: bar.downloadPressed()
         }
 
         Slider {

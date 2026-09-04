@@ -117,6 +117,24 @@ void PlaybackSession::requestPlay(const QString& type, const QString& imdbId,
     m_pendingId    = imdbId;
     m_pendingTitle = title.isEmpty() ? imdbId : title;
 
+    // Offline-first tier (Compose MainAppContent parity): a completed
+    // download plays from disk, skipping reuse cache + resolution. Local
+    // files are never relays and never touch the link cache.
+    if (m_localFileProvider) {
+        const CompositeId parts = splitCompositeId(imdbId);
+        const QString local = m_localFileProvider(
+            parts.isEpisode() ? parts.parent : imdbId,
+            parts.season, parts.episode, imdbId);
+        if (!local.isEmpty()) {
+            acceptSession(m_title, m_url, m_type, m_id, m_season,
+                          m_episode, m_isRelay, m_pendingTitle, local,
+                          type, imdbId, false);
+            emit sessionChanged();
+            emit playbackReady(m_title, m_url);
+            return;
+        }
+    }
+
     // Reuse-link fast path (Compose StreamDestination parity): a fresh
     // cached direct link skips resolution entirely. Torrent-relay urls are
     // never cached (transient localhost), so a hit is always directly

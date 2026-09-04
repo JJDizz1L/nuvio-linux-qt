@@ -248,6 +248,53 @@ cutover (DEB/RPM/Flatpak/AppImage, portal helper, signing, AUR).
   browse/play), device flows against live accounts, cross-line blob
   round-trip Compose↔Qt.
 
+### A3 Downloads manager ✅ DONE 2026-09-03 (48/48 ctest, boot clean zero QML errors, smoke PASS vaapi-copy)
+
+- **DL1 engine.** `systems/downloads`: verbatim `DownloadItem`
+  (camelCase JSON, `logicalContentKey`, `isEpisode`, `isPlayable`,
+  `progressFraction`), `DownloadStatus` names, profile store file
+  `downloads` key `downloads_<id>` (Compose `ProfileScopedKey` parity),
+  replace-by-logical-key enqueue, `buildFileName` verbatim
+  (`<title>[ SxxEyy[ ep]]_<base36now>.<ext>`, 92-char sanitized stem),
+  supported-url gate (magnet/m3u8/mpd/torrent refused), QNAM transfers
+  with Range-resume `.part` files under `<config>/nuvio-linux/downloads/`,
+  3-attempt retry, Downloading→Paused normalization on load (never
+  auto-runs network at boot), in-flight abort on `setProfileId`,
+  `pauseActiveDownloads`, `openDownloadsDirectory` (xdg-open — the
+  fork's desktop fallback; keeps the lib QtCore-only), playable lookup
+  with videoId-first/S-E/movie-fallback order + dir/fileName fallback
+  (resolveLocalFileUri parity). Process-wide atomic id ordinal (Compose
+  `nextDownloadOrdinal` parity — per-manager ordinals collided within
+  the same millisecond, bisect-proven by duplicate-id rows).
+- **DL2 playback + UI.** `PlaybackSession::setLocalFileProvider`
+  offline-first tier (hit wins over reuse/resolve/torrent, never a
+  relay, never cached) wired in main.cpp to the manager; `downloads`
+  context prop + 14th profile fan-out target. TransportBar Download
+  button (same `!currentIsLocalRelay` gate as External) enqueues the
+  live session source with shell-split identity + page toast outcomes.
+  `DownloadsPage` route `downloads` (Active/Movies/Shows sections,
+  show drill-down with specials-first season groups + series-episode
+  sort, pause/resume/retry/play/delete, determinate/indeterminate
+  progress, open-folder with failure toast, empty states); completed
+  rows play through `requestPlay` so resume + watch state + scrobble
+  ride free. Nav: Settings root entry (fork parity) + LibraryPage
+  header button (Cloud precedent).
+- Gotchas: `pkill -f <name>` matches the invoking shell's own cmdline
+  and kills it mid-script (use `pkill -x`); QDesktopServices is QtGui
+  in Qt6 (xdg-open instead); `rg -rn` parses as `-r n` replace mode.
+- Divergences with reasons: no per-stream download picker (this line
+  has no manual stream UI — the playing source is the addressable
+  one); no source/proxy header forwarding on transfers (direct urls
+  only, same class as the External button); immediate delete, no
+  confirm modal (CollectionsPage precedent); no auto-navigate on
+  completion (would yank mid-playback); poster/logo/background/
+  thumbnail/header fields not carried (rows are text-only like the
+  fork's DownloadRow); no completion auto-play hook beyond the
+  prefer-local tier (covers next-episode autoplay + replays).
+- TEST-LATER: real-http download round-trip on a metered link, folder
+  open on a full desktop session, cross-line store read (Compose
+  written `downloads_1` rows resolve + play here).
+
 ## Appendix B — Skip / incompatible (normative)
 
 - Direct `.kt`/Compose import: impossible by toolchain (re-express only).

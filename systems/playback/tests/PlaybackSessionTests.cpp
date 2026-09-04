@@ -137,6 +137,44 @@ int main(int argc, char** argv)
               "toast gets the human title");
     }
 
+    { // offline-first: a downloaded file wins over every network tier
+        // (no addon ingest at all - the resolver is never consulted).
+        PlaybackSession local(&r);
+        local.setLocalFileProvider(
+            [](const QString& parent, int season, int episode,
+               const QString& videoId) -> QString {
+                if (parent == "tt500" && season == 2 && episode == 3 &&
+                    videoId == "tt500:2:3")
+                    return QStringLiteral("file:///d/ep.mp4");
+                return {};
+            });
+        Capture capLocal;
+        capLocal.attach(local);
+        const int readyB4 = cap.ready;
+        local.requestPlay("series", "tt500:2:3", "Ep Three");
+        CHECK(capLocal.ready == 1 &&
+                  capLocal.lastReadyUrl == "file:///d/ep.mp4",
+              "downloaded episode plays from disk");
+        CHECK(local.currentIsLocalRelay() == false,
+              "local files are not relays");
+        CHECK(cap.ready == readyB4, "network session untouched");
+
+        // Miss: empty provider result falls through to normal resolution.
+        PlaybackSession miss(&r);
+        miss.setLocalFileProvider(
+            [](const QString&, int, int, const QString&) -> QString {
+                return {};
+            });
+        Capture capMiss;
+        capMiss.attach(miss);
+        r.applyAddonStreams("movie/tt501", "alpha", bodyDirectA);
+        r.applyAddonStreams("movie/tt501", "beta", bodyEmpty);
+        miss.requestPlay("movie", "tt501", "Miss");
+        CHECK(capMiss.ready == 1 &&
+                  capMiss.lastReadyUrl == "https://cdn.example/a.mkv",
+              "provider miss resolves over the network");
+    }
+
     { // stale-guard: late completion of a superseded id is dropped
         const int readyB4 = cap.ready;
         session.requestPlay("movie", "tt400", "Old");   // in flight...
