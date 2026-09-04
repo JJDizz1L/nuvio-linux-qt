@@ -69,6 +69,10 @@ QVariantMap normalizeVideo(const QJsonObject& v)
 
     out.insert(QStringLiteral("season"),      season);
     out.insert(QStringLiteral("episode"),     episode);
+    out.insert(QStringLiteral("id"),
+               v.value(QLatin1String("id")).toString());
+    out.insert(QStringLiteral("released"),
+               v.value(QLatin1String("released")).toString());
     out.insert(QStringLiteral("name"),
                v.value(QLatin1String("name")).toString());
     out.insert(QStringLiteral("description"),

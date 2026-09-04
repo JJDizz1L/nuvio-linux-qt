@@ -295,6 +295,39 @@ cutover (DEB/RPM/Flatpak/AppImage, portal helper, signing, AUR).
   open on a full desktop session, cross-line store read (Compose
   written `downloads_1` rows resolve + play here).
 
+### A4 Episode-release notifications ✅ DONE 2026-09-03 (49/49 ctest, boot clean zero QML errors, smoke PASS vaapi-copy)
+
+- **N1 engine.** `systems/notifications`: verbatim date kernel
+  (plain-ISO passthrough, zoned→local, zone-less date part, embedded
+  fallback, bare ±hhmm normalization), JVM-`String.hashCode` ids
+  (python-verified vectors), `series` normalization, tracked keys,
+  `S1E2`/`E5` body shapes, `nuvio://meta` links, followedOn inference
+  (savedAt >= 1999-12-31 else today), followedOn-gated request builder
+  over `metaFromJson` bodies, sorted store
+  (`episode_release_notifications`, key `..._<id>` + Qt-local `_fired`
+  companion), manager (reconcile on library change, width-4 Cinemeta
+  fetch chain with token stale-guard, single-flight refresh,
+  in-flight abort on `setProfileId`).
+- **N2 platform (honest divergence).** The fork's desktop backend is a
+  stub (authorization denied, schedule/show no-op, page hidden behind
+  `AppFeaturePolicy`). Linux has a real bus, so this line ships
+  notify-send instead: enabling probes for the binary, refresh fires
+  due releases (date <= today) once each, future ones count as
+  scheduled and fire on later refreshes; the settings leaf is
+  therefore visible here. No daemon exists, so firing only happens
+  while the app runs (documented, not fork-silent).
+- **N3 sync + UI.** `notifications_settings` is OWNED now (was
+  passthrough): orchestrator apply/export legs + T9 suite leg;
+  `notifications` context prop + 15th fan-out target + startup
+  `refreshAsync` (fork LaunchedEffect parity);
+  `SettingsNotificationsPage` leaf (switch, scheduled count,
+  test button, status/error/permission lines) + root entry.
+- Supporting change: `normalizeVideo` rows additively carry `id` +
+  `released` (meta tests still green).
+- TEST-LATER: due-fire against a real saved show with a release today,
+  test-button delivery on a full desktop session, cross-line
+  `episodeReleaseAlertsEnabled` round-trip Compose↔Qt.
+
 ## Appendix B — Skip / incompatible (normative)
 
 - Direct `.kt`/Compose import: impossible by toolchain (re-express only).

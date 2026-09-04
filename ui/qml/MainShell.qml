@@ -85,6 +85,10 @@ ApplicationWindow {
         anchors.fill: parent
         visible: navigation.currentRoute === "settings-debrid"
     }
+    Pages.SettingsNotificationsPage {
+        anchors.fill: parent
+        visible: navigation.currentRoute === "settings-notifications"
+    }
     Pages.CloudPage {
         anchors.fill: parent
         visible: navigation.currentRoute === "cloud"

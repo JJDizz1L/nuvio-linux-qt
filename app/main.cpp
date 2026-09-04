@@ -35,6 +35,7 @@
 #include "nuvio/debrid/DebridResolver.h"
 #include "nuvio/debrid/DebridSettings.h"
 #include "nuvio/downloads/DownloadManager.h"
+#include "nuvio/notifications/ReleaseNotifications.h"
 #include "nuvio/authsync/ProgressSyncController.h"
 #include "nuvio/authsync/AuthService.h"
 #include "nuvio/authsync/SyncOrchestrator.h"
@@ -589,6 +590,22 @@ int main(int argc, char* argv[])
         librarySync->fullLibrarySyncThenDeltas();
         collectionSync->pullNow();
     }
+    // Episode-release alerts (A4): tracked shows reconcile against the
+    // library above; refresh fires at startup like the fork's
+    // LaunchedEffect (due releases notify while running; future ones
+    // count as scheduled). Blob owns notifications_settings now.
+    auto releaseNotifications =
+        std::make_unique<nuvio::notifications::ReleaseNotificationManager>(
+            libraryStore.get());
+    syncOrch->setReleaseNotifications(releaseNotifications.get());
+    QObject::connect(releaseNotifications.get(),
+                     &nuvio::notifications::ReleaseNotificationManager::changed,
+                     syncOrch.get(),
+                     &nuvio::authsync::SyncOrchestrator::schedulePush);
+    engine.rootContext()->setContextProperty(
+        QStringLiteral("notifications"), QVariant::fromValue<QObject*>(
+                                             releaseNotifications.get()));
+    releaseNotifications->refreshAsync();
     // Provider credentials (T4): the two skip-provider API keys through
     // the credential family (the settings blob strips them by policy).
     auto credsSync =
@@ -707,6 +724,7 @@ int main(int argc, char* argv[])
             credsSync->setProfileId(index);
             debridAuth->setProfileId(index);
             downloadManager->setProfileId(index);
+            releaseNotifications->setProfileId(index);
         });
     QObject::connect(
         auth.get(), &nuvio::authsync::AuthService::stateChanged,

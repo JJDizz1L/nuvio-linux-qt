@@ -42,6 +42,10 @@ namespace nuvio::debrid {
 class DebridSettings;
 }
 
+namespace nuvio::notifications {
+class ReleaseNotificationManager;
+}
+
 namespace nuvio::watching {
 class WatchRecorder;
 }
@@ -80,6 +84,13 @@ public:
     {
         m_debrid = debrid;
     }
+    /// Release-alert source for the blob's notifications_settings feature
+    /// (optional; absent keeps the passthrough shape).
+    void setReleaseNotifications(
+        notifications::ReleaseNotificationManager* notifications)
+    {
+        m_notifications = notifications;
+    }
 
     /// One guarded async pull; harmless no-op when signed out/busy.
     void pullNow();
@@ -104,6 +115,7 @@ private:
     settings::AppSettings* m_settings = nullptr;
     watching::WatchRecorder* m_recorder = nullptr;
     debrid::DebridSettings* m_debrid = nullptr;
+    notifications::ReleaseNotificationManager* m_notifications = nullptr;
     AuthConfig m_cfg;
     TokenProvider m_token;
     SyncRpcClient* m_client = nullptr;

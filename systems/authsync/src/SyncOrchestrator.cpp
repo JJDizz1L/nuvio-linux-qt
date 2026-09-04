@@ -14,6 +14,7 @@
 #include "nuvio/settings/SyncPlayerSettings.h"
 #include "nuvio/settings/PropertiesStore.h"
 #include "nuvio/debrid/DebridSettings.h"
+#include "nuvio/notifications/ReleaseNotifications.h"
 #include "nuvio/watching/ContinueWatchingPrefs.h"
 #include "nuvio/watching/WatchRecorder.h"
 
@@ -134,6 +135,23 @@ void SyncOrchestrator::pullNow()
                     applied         = applied || debridTouched;
                 }
             }
+            // Release alerts apply the same way (owned feature; absent
+            // keys untouched). Runs in the same pre-gate position so
+            // notification-only blobs still land.
+            if (m_notifications) {
+                const QJsonObject notifications = features
+                                                      .value(QLatin1String(
+                                                          settings::BlobFeature::
+                                                              kNotifications))
+                                                      .toObject();
+                if (!notifications.isEmpty()) {
+                    m_applyRemote = true;
+                    const bool notificationsTouched =
+                        m_notifications->applySyncPayload(notifications);
+                    m_applyRemote   = false;
+                    applied         = applied || notificationsTouched;
+                }
+            }
 
             if (player.isEmpty() && !applied) {
                 emit pullFinished(false);   // nothing we own yet
@@ -220,6 +238,15 @@ QJsonObject SyncOrchestrator::fullPushBlob()
         if (!debrid.isEmpty())
             passthrough.insert(
                 QLatin1String(settings::BlobFeature::kDebrid), debrid);
+    }
+    if (m_notifications) {
+        // Release alerts are OWNED now: fresh export joins the blob
+        // (single honest bool, no credentials involved).
+        const QJsonObject notifications = m_notifications->exportSyncPayload();
+        if (!notifications.isEmpty())
+            passthrough.insert(
+                QLatin1String(settings::BlobFeature::kNotifications),
+                notifications);
     }
     return settings::buildPushBlob(player, passthrough);
 }

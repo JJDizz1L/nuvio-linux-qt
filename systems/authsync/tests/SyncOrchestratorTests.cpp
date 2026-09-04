@@ -5,6 +5,8 @@
 #include <nuvio/authsync/SyncOrchestrator.h>
 
 #include <nuvio/debrid/DebridSettings.h>
+#include <nuvio/library/LibraryStore.h>
+#include <nuvio/notifications/ReleaseNotifications.h>
 #include <nuvio/settings/AppSettings.h>
 #include <nuvio/watching/ContinueWatchingPrefs.h>
 
@@ -395,6 +397,41 @@ int main(int argc, char** argv)
         CHECK(!features.value(QStringLiteral("debrid_settings")).toObject()
                    .contains(QStringLiteral("debrid_torbox_api_key")),
               "credentials stripped from the pushed blob");
+    }
+
+    { // T9: owned notifications fragment applies remotely and rides push.
+        QJsonObject notificationsFragment;
+        notificationsFragment.insert(
+            QStringLiteral("episodeReleaseAlertsEnabled"), true);
+        QJsonObject notificationsFeatures;
+        notificationsFeatures.insert(QStringLiteral("player_settings"),
+                                     QJsonObject{});
+        notificationsFeatures.insert(QStringLiteral("notifications_settings"),
+                                     notificationsFragment);
+        QJsonObject blob;
+        blob.insert(QStringLiteral("version"), 3);
+        blob.insert(QStringLiteral("features"), notificationsFeatures);
+        rpc.setBlobReply(
+            QJsonDocument(blob).toJson(QJsonDocument::Compact));
+        nuvio::library::LibraryStore notifLibrary(1);
+        nuvio::notifications::ReleaseNotificationManager notifMgr(
+            &notifLibrary);
+        orch.setReleaseNotifications(&notifMgr);
+        orch.pullNow();
+        pump(200);
+        CHECK(notifMgr.enabled(), "notifications fragment applied");
+        // Any local change schedules a push carrying the owned fragment.
+        settings.setPreferredAudioLanguage(QStringLiteral("fr"));
+        pump(200);
+        const auto features2 =
+            QJsonDocument::fromJson(rpc.bodies.last()).object()
+                .value(QStringLiteral("p_settings_json")).toObject()
+                .value(QStringLiteral("features")).toObject();
+        CHECK(features2.value(QStringLiteral("notifications_settings"))
+                          .toObject()
+                          .value(QStringLiteral("episodeReleaseAlertsEnabled"))
+                          .toBool() == true,
+              "owned notifications fragment pushed");
     }
 
     { // T5: signed-out orchestrator is a full no-op
