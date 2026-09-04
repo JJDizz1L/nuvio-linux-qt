@@ -127,5 +127,21 @@ Item {
             color: Theme.textDisabled
             font.pixelSize: 11
         }
+
+        // In-app updater (Appendix A): manual check + build version.
+        Row {
+            width: parent.width
+            spacing: Theme.spacingMd
+            Button {
+                text: qsTr("Check for updates")
+                onClicked: updater.checkForUpdates(true, true)
+            }
+            Text {
+                anchors.verticalCenter: parent.verticalCenter
+                text: qsTr("Nuvio Linux Qt %1").arg(updater.appVersion)
+                color: Theme.textDisabled
+                font.pixelSize: 11
+            }
+        }
     }
 }

@@ -193,6 +193,173 @@ ApplicationWindow {
         }
     }
 
+    // In-app updater (Appendix A): transient notices reuse the shell
+    // toast; the banner below is a top overlay (Compose pushes content
+    // down, but every route here is a fill-anchored overlay, so pushing
+    // would mean restructuring all 25 pages for a transient strip).
+    Connections {
+        target: updater
+        function onNotice(message) {
+            toastText.text = message
+            toast.opacity = 1
+            toastTimer.restart()
+        }
+    }
+    Rectangle {
+        id: updateBanner
+        z: 60
+        visible: updater.bannerVisible
+        anchors.top: parent.top
+        anchors.left: parent.left
+        anchors.right: parent.right
+        height: 64
+        color: Theme.surface
+        function formatSize(bytes) {
+            if (bytes <= 0) return ""
+            var units = ["B", "KB", "MB", "GB"]
+            var value = bytes
+            var unit = 0
+            while (value >= 1024 && unit < units.length - 1) {
+                value /= 1024
+                unit += 1
+            }
+            var rounded = (value >= 10 || unit === 0) ? Math.floor(value)
+                        : Math.floor(value * 10) / 10
+            return rounded + " " + units[unit]
+        }
+        Rectangle {
+            anchors.left: parent.left
+            anchors.top: parent.top
+            anchors.bottom: parent.bottom
+            width: updater.downloading && updater.downloadProgress >= 0
+                   ? parent.width * updater.downloadProgress : 0
+            color: Theme.accent
+            opacity: 0.35
+            visible: updater.downloading
+        }
+        Column {
+            anchors.left: parent.left
+            anchors.leftMargin: Theme.spacingMd
+            anchors.right: updateBannerActions.left
+            anchors.rightMargin: Theme.spacingSm
+            anchors.verticalCenter: parent.verticalCenter
+            Text {
+                width: parent.width
+                elide: Text.ElideRight
+                color: Theme.textPrimary
+                font.pixelSize: 14
+                font.weight: Font.DemiBold
+                text: {
+                    var label = updater.updateTag
+                    var size = updateBanner.formatSize(updater.assetSize)
+                    return size !== "" ? label + " • " + size : label
+                }
+            }
+            Text {
+                width: parent.width
+                elide: Text.ElideRight
+                maximumLineCount: 2
+                wrapMode: Text.Wrap
+                font.pixelSize: 12
+                color: updater.errorMessage !== "" ? "#ff9a9a"
+                                                  : Theme.textSecondary
+                text: updater.errorMessage !== ""
+                      ? updater.errorMessage
+                      : updater.downloading
+                      ? updater.downloadProgress >= 0
+                        ? qsTr("Downloading update… %1%").arg(
+                              Math.round(updater.downloadProgress * 100))
+                        : qsTr("Preparing download…")
+                      : updater.downloadedPath !== ""
+                      ? qsTr("Update downloaded — ready to install")
+                      : qsTr("A new version is available")
+            }
+        }
+        Row {
+            id: updateBannerActions
+            anchors.right: parent.right
+            anchors.rightMargin: Theme.spacingMd
+            anchors.verticalCenter: parent.verticalCenter
+            spacing: Theme.spacingSm
+            Button {
+                text: qsTr("Notes")
+                flat: true
+                enabled: updater.updateNotes !== ""
+                onClicked: updateNotesOverlay.visible = true
+            }
+            Button {
+                visible: !updater.downloading
+                text: updater.downloadedPath !== "" ? qsTr("Install")
+                      : updater.errorMessage !== "" ? qsTr("Retry")
+                                                   : qsTr("Download")
+                onClicked: updater.downloadedPath !== ""
+                           ? updater.installDownloadedUpdate()
+                           : updater.downloadUpdate()
+            }
+            Button {
+                visible: !updater.downloading
+                text: qsTr("Later")
+                flat: true
+                onClicked: updater.dismissBanner()
+            }
+        }
+    }
+    Rectangle {
+        id: updateNotesOverlay
+        z: 70
+        visible: false
+        anchors.fill: parent
+        color: "#80000000"
+        MouseArea {
+            anchors.fill: parent
+            onClicked: updateNotesOverlay.visible = false
+        }
+        Rectangle {
+            width: Math.min(parent.width - 80, 560)
+            height: Math.min(parent.height - 120, 420)
+            anchors.centerIn: parent
+            radius: Theme.radiusMd
+            color: Theme.surface
+            Text {
+                id: updateNotesTitle
+                anchors.top: parent.top
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.margins: Theme.spacingMd
+                color: Theme.textPrimary
+                font.pixelSize: 16
+                font.weight: Font.DemiBold
+                text: updater.updateTitle
+            }
+            Flickable {
+                anchors.top: updateNotesTitle.bottom
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.bottom: updateNotesClose.top
+                anchors.margins: Theme.spacingMd
+                contentHeight: updateNotesText.height
+                clip: true
+                Text {
+                    id: updateNotesText
+                    width: parent.width
+                    wrapMode: Text.Wrap
+                    color: Theme.textSecondary
+                    font.pixelSize: 13
+                    text: updater.updateNotes
+                }
+            }
+            Button {
+                id: updateNotesClose
+                anchors.bottom: parent.bottom
+                anchors.right: parent.right
+                anchors.margins: Theme.spacingMd
+                text: qsTr("Close")
+                flat: true
+                onClicked: updateNotesOverlay.visible = false
+            }
+        }
+    }
+
     // Trailer resolution: the extracted googlevideo url lands in the SAME
     // player route as regular playback (single consumer surface). Failures
     // reuse the shell toast.

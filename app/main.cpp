@@ -43,6 +43,7 @@
 #include "nuvio/membership/MembershipOverview.h"
 #include "nuvio/notifications/ReleaseNotifications.h"
 #include "nuvio/plugins/PluginRepository.h"
+#include "nuvio/updater/AppUpdater.h"
 #include "nuvio/tmdb/TmdbService.h"
 #include "nuvio/tmdb/TmdbSettings.h"
 #include "nuvio/authsync/ProgressSyncController.h"
@@ -549,6 +550,15 @@ int main(int argc, char* argv[])
             if (as && ap->sessionActive()) as->pullNow();
         });
     if (auth->sessionActive()) addonsSync->pullNow();
+    // In-app updater (Appendix A): silent auto-check at startup, banner +
+    // manual check in Settings. Release feed points at this product line;
+    // ignored tags share the Compose desktop store (nuvio_updater).
+    auto appUpdater = std::make_unique<nuvio::updater::AppUpdater>(
+        QString::fromLatin1(NUVIO_VERSION_STRING));
+    engine.rootContext()->setContextProperty(
+        QStringLiteral("updater"),
+        QVariant::fromValue<QObject*>(appUpdater.get()));
+    appUpdater->ensureAutoCheckStarted();
     // User library + collections (P5, Compose-shared profile stores).
     auto libraryStore = std::make_unique<nuvio::library::LibraryStore>(
         nuvio::settings::ActiveProfile::id());

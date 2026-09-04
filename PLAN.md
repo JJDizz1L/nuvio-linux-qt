@@ -212,7 +212,7 @@ backends yet (P3+ with their features).
   credential vault round-trip on the Tier-1 pattern.
 
 Remaining, in suggested order:
-in-app updater; deeplink (`nuvio://`/`stremio://`); Sentry; packaging
+deeplink (`nuvio://`/`stremio://`); Sentry; packaging
 cutover (DEB/RPM/Flatpak/AppImage, portal helper, signing, AUR).
 
 ### A2 Debrid ✅ DONE 2026-09-03 (47/47 ctest, boot clean, smoke PASS vaapi-copy)
@@ -519,3 +519,39 @@ cutover (DEB/RPM/Flatpak/AppImage, portal helper, signing, AUR).
   P4 gap, unchanged by this phase).
 - TEST-LATER: pull/push round-trip against the live endpoint (needs a
   signed-in account), cross-device shelf-order convergence.
+
+### A10 In-app updater ✅ DONE 2026-09-04 (60/60 ctest, boot clean zero QML errors, smoke PASS vaapi-copy)
+
+- **Kernel.** `systems/updater`: `UpdateVersion` (normalize v/V, token
+  split, leading-digit parts, zero-padded compare, unparseable string
+  fallback), `UpdateAssets` (Linux selector .deb/.AppImage + arch
+  fragments + universal/all fallback, preferred-then-fallback-then-first
+  pick), `AppUpdate` release parse (channel match, draft skip,
+  prerelease gate, tag←name fallback, malformed vs silent-no-channel
+  distinguished).
+- **Controller.** `AppUpdater` QObject: silent auto-check once at
+  startup, forced/manual checks, ignored-tag (shared Compose desktop
+  `nuvio_updater` store), streamed download with progress + .part +
+  Content-Length guard + updates-dir clear, xdg-open install + 500 ms
+  exit (desktop Linux parity), banner/error/notice states for QML.
+- **Product identity (deliberate).** Release feed points at
+  JJDizz1L/nuvio-linux-qt, NOT the fork's NuvioMedia/NuvioDesktop (which
+  would offer the Compose build to Qt users). With no Qt releases
+  published yet, checks honestly report "latest"; once the packaging
+  cutover ships .deb/.AppImage assets, updates light up unchanged.
+- **UI.** MainShell top overlay banner (tag • size, state subtitle,
+  accent progress fill, Notes/Download-Install-Retry/Later — action +
+  dismiss hidden while downloading, fork parity) + release-notes
+  overlay + shell-toast notices; Settings footer "Check for updates" +
+  build version. Overlay, not content-pushing (all 25 routes are
+  fill-anchored; noted divergence). `ignoreThisVersion` stays
+  controller-only — it has no UI call site in the fork either.
+- Gotchas (session-proven): `class QFile*` member forward-declares
+  into our namespace (include <QFile>); `QProcess::startDetached`
+  children inherit stdio — null them or installer descendants hold
+  harness pipes open forever (manifested as a ctest timeout on a
+  PASSING suite); the download test's auto-install really launches —
+  seam the installer to /bin/true (this box opens .debs in nvim and
+  five orphans had to be SIGKILLed).
+- TEST-LATER: live feed check once Qt releases exist, real .deb
+  download→install handoff on a packaged build.
