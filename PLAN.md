@@ -328,6 +328,36 @@ cutover (DEB/RPM/Flatpak/AppImage, portal helper, signing, AUR).
   test-button delivery on a full desktop session, cross-line
   `episodeReleaseAlertsEnabled` round-trip Compose↔Qt.
 
+### A5 TMDB service + settings ✅ DONE 2026-09-03 (50/50 ctest, boot clean zero QML errors, smoke PASS vaapi-copy)
+
+- **T1 settings.** `systems/tmdb`: 15 verbatim `tmdb_*` keys,
+  profile-scoped (`tmdb_settings` file, `..._<id>` keys), enabled&&key
+  gate (enable-without-key no-ops, blank-key disables), `_`→`-`
+  language normalization, present-only sync envelopes + per-key merge
+  apply (Qt debrid convention).
+- **T2 id service.** `TmdbService`: media-type normalization,
+  prefix-strip id chain, `buildTmdbUrl` (blank values dropped),
+  `/find` first-positive pick per type rule, `external_ids` parse,
+  per-(id,type) caches both directions, `NUVIO_TMDB_BASE` test seam;
+  live suite legs run through a local stub (no network).
+- **T3 sync + creds.** `tmdb_settings` is OWNED now (was passthrough):
+  orchestrator apply/export legs with the api key stripped at
+  assembly (credential policy) + T10 suite leg; the key travels the
+  provider-credentials family (provider `tmdb`, field `api_key`) with
+  seed/push/merge legs + T1/T2 creds coverage; `tmdb` context prop +
+  16th fan-out target; settings changes schedule blob pushes, key
+  changes schedule creds syncs.
+- **T4 UI.** `SettingsTmdbPage` leaf (enrichment switch gated on key,
+  password key row, language row, 12 module toggles gated on
+  enabled&&key, fork strings verbatim) + root entry + route.
+- Deliberately deferred (P6 list stands): the 2255-line metadata
+  enrichment engine (person/entity/more-like-this/collections/
+  trailers/episodes/artwork overlays) — the module switches persist +
+  sync as honest inert flags until it lands.
+- TEST-LATER: live `/find` + `external_ids` round-trip with a real key,
+  cross-line `tmdb_settings` round-trip Compose↔Qt, key arrival via
+  credential sync from a Compose-seeded server row.
+
 ## Appendix B — Skip / incompatible (normative)
 
 - Direct `.kt`/Compose import: impossible by toolchain (re-express only).

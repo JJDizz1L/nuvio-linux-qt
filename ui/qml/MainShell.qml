@@ -89,6 +89,10 @@ ApplicationWindow {
         anchors.fill: parent
         visible: navigation.currentRoute === "settings-notifications"
     }
+    Pages.SettingsTmdbPage {
+        anchors.fill: parent
+        visible: navigation.currentRoute === "settings-tmdb"
+    }
     Pages.CloudPage {
         anchors.fill: parent
         visible: navigation.currentRoute === "cloud"

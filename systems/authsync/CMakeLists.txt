@@ -20,7 +20,7 @@ target_include_directories(nuvio_authsync PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/inc
 # (byte-compat with the Compose profile). Sibling-systems link, sanctioned.
 target_link_libraries(nuvio_authsync
     PUBLIC Qt6::Core Qt6::Network nuvio::settings nuvio::watching
-           nuvio::library nuvio::debrid nuvio::notifications)
+           nuvio::library nuvio::debrid nuvio::notifications nuvio::tmdb)
 nuvio_common_target_props(nuvio_authsync)
 add_library(nuvio::authsync ALIAS nuvio_authsync)
 

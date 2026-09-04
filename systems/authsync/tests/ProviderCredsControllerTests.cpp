@@ -3,6 +3,7 @@
 #include <nuvio/authsync/ProviderCredsController.h>
 
 #include <nuvio/settings/AppSettings.h>
+#include <nuvio/tmdb/TmdbSettings.h>
 
 #include <QCoreApplication>
 #include <QDir>
@@ -124,16 +125,18 @@ int main(int argc, char** argv)
     cfg.baseUrl = rpc.baseUrl().toString().toUtf8();
 
     AppSettings settings;
-    ProviderCredsController sync(&settings, cfg,
+    nuvio::tmdb::TmdbSettings tmdb;
+    ProviderCredsController sync(&settings, &tmdb, cfg,
                                  [] { return QByteArray("jwt"); }, 1);
     sync.setDebounceMs(10);
     int syncs = 0;
     QObject::connect(&sync, &ProviderCredsController::syncFinished,
                      [&](bool, bool) { ++syncs; });
 
-    { // T1: empty server + local values -> seed RPC with both rows.
+    { // T1: empty server + local values -> seed RPC with all rows.
         settings.setAnimeSkipClientId("cid-1");
         settings.setIntroDbApiKey("key-1");
+        tmdb.setApiKey("tmdb-1");
         rpc.pullReply = "[]";
         sync.syncNow();
         pump(300);
@@ -150,7 +153,18 @@ int main(int argc, char** argv)
         CHECK(sawSeed, "empty server seeds");
         const auto creds =
             seedParams.value(QStringLiteral("p_credentials")).toArray();
-        CHECK(creds.size() == 2, "both credential rows seeded");
+        CHECK(creds.size() == 3, "all three credential rows seeded");
+        bool tmdbOk = false;
+        for (const auto& v : creds) {
+            const auto o = v.toObject();
+            if (o.value(QStringLiteral("provider")).toString() == "tmdb" &&
+                o.value(QStringLiteral("credential_json"))
+                        .toObject()
+                        .value(QStringLiteral("api_key"))
+                        .toString() == "tmdb-1")
+                tmdbOk = true;
+        }
+        CHECK(tmdbOk, "tmdb row seeded in field shape");
         CHECK(seedParams.value(QStringLiteral("p_profile_id")).toInt() == 1,
               "profile param");
     }
@@ -160,7 +174,9 @@ int main(int argc, char** argv)
             "[{\"provider\":\"animeskip\",\"credential_json\":"
             "{\"client_id\":\"cid-remote\"}},"
             "{\"provider\":\"introdb\",\"credential_json\":"
-            "{\"api_key\":\"key-1\"}}]");
+            "{\"api_key\":\"key-1\"}},"
+            "{\"provider\":\"tmdb\",\"credential_json\":"
+            "{\"api_key\":\"tmdb-remote\"}}]");
         sync.syncNow();   // baseline clean -> straight to pull+merge
         pump(300);
         CHECK(syncs == 2, "merge cycle finished");
@@ -168,6 +184,7 @@ int main(int argc, char** argv)
               "remote animeskip value applied");
         CHECK(settings.introDbApiKey() == "key-1",
               "matching introdb value untouched");
+        CHECK(tmdb.apiKey() == "tmdb-remote", "remote tmdb value applied");
     }
 
     { // T3: local edit pushes (push RPC, credential_json shapes).
@@ -205,7 +222,7 @@ int main(int argc, char** argv)
         FakeRpc quiet;
         CHECK(quiet.start(), "quiet endpoint listens");
         cfg.baseUrl = quiet.baseUrl().toString().toUtf8();
-        ProviderCredsController anon(&settings, cfg,
+        ProviderCredsController anon(&settings, &tmdb, cfg,
                                      [] { return QByteArray(); }, 1);
         anon.setDebounceMs(10);
         anon.syncNow();

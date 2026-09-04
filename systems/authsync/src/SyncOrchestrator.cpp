@@ -15,6 +15,7 @@
 #include "nuvio/settings/PropertiesStore.h"
 #include "nuvio/debrid/DebridSettings.h"
 #include "nuvio/notifications/ReleaseNotifications.h"
+#include "nuvio/tmdb/TmdbSettings.h"
 #include "nuvio/watching/ContinueWatchingPrefs.h"
 #include "nuvio/watching/WatchRecorder.h"
 
@@ -152,6 +153,23 @@ void SyncOrchestrator::pullNow()
                     applied         = applied || notificationsTouched;
                 }
             }
+            // TMDB settings apply the same way (owned feature). The api
+            // key applies when present (stored, never pushed back -
+            // credential policy); the provider-credentials family is its
+            // normal wire path.
+            if (m_tmdb) {
+                const QJsonObject tmdb =
+                    features
+                        .value(QLatin1String(settings::BlobFeature::kTmdb))
+                        .toObject();
+                if (!tmdb.isEmpty()) {
+                    m_applyRemote = true;
+                    const bool tmdbTouched =
+                        m_tmdb->applySyncPayload(tmdb);
+                    m_applyRemote   = false;
+                    applied         = applied || tmdbTouched;
+                }
+            }
 
             if (player.isEmpty() && !applied) {
                 emit pullFinished(false);   // nothing we own yet
@@ -247,6 +265,16 @@ QJsonObject SyncOrchestrator::fullPushBlob()
             passthrough.insert(
                 QLatin1String(settings::BlobFeature::kNotifications),
                 notifications);
+    }
+    if (m_tmdb) {
+        // TMDB is OWNED now: fresh export joins the blob minus the api
+        // key (Compose credential-policy parity - the key syncs through
+        // the provider-credentials family only).
+        QJsonObject tmdb = m_tmdb->exportSyncPayload();
+        tmdb.remove(QStringLiteral("tmdb_api_key"));
+        if (!tmdb.isEmpty())
+            passthrough.insert(
+                QLatin1String(settings::BlobFeature::kTmdb), tmdb);
     }
     return settings::buildPushBlob(player, passthrough);
 }

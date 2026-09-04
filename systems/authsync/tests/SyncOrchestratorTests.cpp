@@ -8,6 +8,7 @@
 #include <nuvio/library/LibraryStore.h>
 #include <nuvio/notifications/ReleaseNotifications.h>
 #include <nuvio/settings/AppSettings.h>
+#include <nuvio/tmdb/TmdbSettings.h>
 #include <nuvio/watching/ContinueWatchingPrefs.h>
 
 #include <QCoreApplication>
@@ -432,6 +433,48 @@ int main(int argc, char** argv)
                           .value(QStringLiteral("episodeReleaseAlertsEnabled"))
                           .toBool() == true,
               "owned notifications fragment pushed");
+    }
+
+    { // T10: owned tmdb fragment applies remotely; the key applies when
+      // present but never rides the push (credential policy).
+        auto envelope = [](const QString& type, const QJsonValue& value) {
+            return QJsonObject{{QLatin1String("type"), type},
+                               {QLatin1String("value"), value}};
+        };
+        QJsonObject tmdbFragment;
+        tmdbFragment.insert(QStringLiteral("tmdb_use_artwork"),
+                            envelope("boolean", false));
+        tmdbFragment.insert(QStringLiteral("tmdb_api_key"),
+                            envelope("string", "should-not-push"));
+        QJsonObject tmdbFeatures;
+        tmdbFeatures.insert(QStringLiteral("player_settings"), QJsonObject{});
+        tmdbFeatures.insert(QStringLiteral("tmdb_settings"), tmdbFragment);
+        QJsonObject blob;
+        blob.insert(QStringLiteral("version"), 3);
+        blob.insert(QStringLiteral("features"), tmdbFeatures);
+        rpc.setBlobReply(
+            QJsonDocument(blob).toJson(QJsonDocument::Compact));
+        nuvio::tmdb::TmdbSettings tmdb;
+        orch.setTmdbSettings(&tmdb);
+        orch.pullNow();
+        pump(200);
+        CHECK(!tmdb.useArtwork(), "tmdb fragment applied");
+        CHECK(tmdb.apiKey() == "should-not-push",
+              "key accepted on apply (stored, never pushed)");
+        settings.setPreferredAudioLanguage(QStringLiteral("de"));
+        pump(200);
+        const auto features3 =
+            QJsonDocument::fromJson(rpc.bodies.last()).object()
+                .value(QStringLiteral("p_settings_json")).toObject()
+                .value(QStringLiteral("features")).toObject();
+        CHECK(features3.value(QStringLiteral("tmdb_settings")).toObject()
+                          .value(QStringLiteral("tmdb_use_artwork"))
+                          .toObject()
+                          .value(QStringLiteral("value")).toBool() == false,
+              "owned tmdb fragment pushed");
+        CHECK(!features3.value(QStringLiteral("tmdb_settings")).toObject()
+                   .contains(QStringLiteral("tmdb_api_key")),
+              "api key stripped from the pushed blob");
     }
 
     { // T5: signed-out orchestrator is a full no-op

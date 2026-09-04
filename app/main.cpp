@@ -36,6 +36,8 @@
 #include "nuvio/debrid/DebridSettings.h"
 #include "nuvio/downloads/DownloadManager.h"
 #include "nuvio/notifications/ReleaseNotifications.h"
+#include "nuvio/tmdb/TmdbService.h"
+#include "nuvio/tmdb/TmdbSettings.h"
 #include "nuvio/authsync/ProgressSyncController.h"
 #include "nuvio/authsync/AuthService.h"
 #include "nuvio/authsync/SyncOrchestrator.h"
@@ -606,15 +608,33 @@ int main(int argc, char* argv[])
         QStringLiteral("notifications"), QVariant::fromValue<QObject*>(
                                              releaseNotifications.get()));
     releaseNotifications->refreshAsync();
-    // Provider credentials (T4): the two skip-provider API keys through
+    // TMDB settings + id service (A5): the key travels the credential
+    // family only; the blob carries the other 14 keys. Blob owns
+    // tmdb_settings now (stripped of the key at assembly).
+    auto tmdbSettings = std::make_unique<nuvio::tmdb::TmdbSettings>();
+    auto tmdbService =
+        std::make_unique<nuvio::tmdb::TmdbService>(tmdbSettings.get());
+    syncOrch->setTmdbSettings(tmdbSettings.get());
+    QObject::connect(tmdbSettings.get(), &nuvio::tmdb::TmdbSettings::changed,
+                     syncOrch.get(),
+                     &nuvio::authsync::SyncOrchestrator::schedulePush);
+    engine.rootContext()->setContextProperty(
+        QStringLiteral("tmdb"), QVariant::fromValue<QObject*>(
+                                    tmdbSettings.get()));
+    // Provider credentials (T4): the Qt-owned API keys through
     // the credential family (the settings blob strips them by policy).
     auto credsSync =
         std::make_unique<nuvio::authsync::ProviderCredsController>(
-            settings.get(), nuvio::authsync::AuthConfig::load(),
+            settings.get(), tmdbSettings.get(),
+            nuvio::authsync::AuthConfig::load(),
             [ap = auth.get()] { return ap->accessToken(); },
             nuvio::settings::ActiveProfile::id());
     QObject::connect(settings.get(),
                      &nuvio::settings::AppSettings::playerOptionsChanged,
+                     credsSync.get(),
+                     &nuvio::authsync::ProviderCredsController::
+                         onLocalCredsChanged);
+    QObject::connect(tmdbSettings.get(), &nuvio::tmdb::TmdbSettings::changed,
                      credsSync.get(),
                      &nuvio::authsync::ProviderCredsController::
                          onLocalCredsChanged);
@@ -725,6 +745,7 @@ int main(int argc, char* argv[])
             debridAuth->setProfileId(index);
             downloadManager->setProfileId(index);
             releaseNotifications->setProfileId(index);
+            tmdbSettings->setProfileId(index);
         });
     QObject::connect(
         auth.get(), &nuvio::authsync::AuthService::stateChanged,

@@ -61,6 +61,8 @@ Item {
                   hint: qsTr("Providers, resolver, templates") },
                 { label: qsTr("Notifications"), route: "settings-notifications",
                   hint: qsTr("Episode release alerts") },
+                { label: qsTr("TMDB"), route: "settings-tmdb",
+                  hint: qsTr("Enrichment, API key, modules") },
                 { label: qsTr("Downloads"), route: "downloads",
                   hint: qsTr("Offline files, active and completed") },
                 { label: qsTr("Integrations"),     route: "settings-integrations",
